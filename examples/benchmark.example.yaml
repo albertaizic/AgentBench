@@ -1,0 +1,31 @@
+# Example AgentBench benchmark definition.
+#
+# Run it with:
+#   agentbench run examples/benchmark.example.yaml
+#
+# Every field shown here except `command`, `extra_args`, `timeout_seconds`
+# and `results_dir` is required; unknown fields are rejected.
+
+name: hello-world-smoke
+# Any URL or local path git can clone.
+repository: https://github.com/octocat/Hello-World.git
+# Exact commit to check out (full sha or abbreviation, hex only).
+commit: 7fd1a60b01f91b314f59955a4e4d4e80d8edf11d
+
+prompt: |
+  Add a new file called BENCHMARK_CANARY.txt at the repository root,
+  containing exactly the word: alive
+
+agent:
+  type: claude-code          # currently the only supported agent type
+  # command: /opt/wrapper/claude   # optional binary override (wrapper scripts)
+  # extra_args: ["--model", "claude-sonnet-5"]
+
+evaluations:
+  # Each command runs in the workspace; exit code 0 = PASS, anything else FAILs the run.
+  - name: canary-file-created
+    command: python -c "import sys, pathlib; sys.exit(0 if pathlib.Path('BENCHMARK_CANARY.txt').exists() else 1)"
+
+# Optional overrides:
+timeout_seconds: 600        # per-step timeout for the agent and each evaluation (default: 900)
+results_dir: results        # where run directories are written (default: results)
