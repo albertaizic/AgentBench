@@ -29,3 +29,21 @@ def load_benchmark(path: str | Path) -> BenchmarkSpec:
         raise LoaderError(f"Benchmark file must contain a YAML mapping, got {type(raw).__name__}: {path}")
 
     return BenchmarkSpec.model_validate(raw)
+
+
+def resolve_repository_path(repository: str, *, base_dir: Path | None) -> str:
+    """Resolve a repository reference to a cloneable location.
+
+    URLs (anything with ``://`` or scp-like ``git@``) pass through untouched;
+    relative paths resolve against *base_dir* — the benchmark file's
+    directory — so committed benchmark fixtures work on any machine. The
+    verbatim benchmark value remains what config identity is computed from.
+    """
+    if "://" in repository or repository.startswith("git@"):
+        return repository
+    candidate = Path(repository)
+    if candidate.is_absolute():
+        return str(candidate)
+    if base_dir is None:
+        return repository
+    return str((base_dir / candidate).resolve())

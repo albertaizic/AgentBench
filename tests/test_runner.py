@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
 
-from agentbench.adapters.base import AgentAdapter, AgentInvocation
-from agentbench.models import AgentSpec, BenchmarkSpec, Evaluation
+from agentbench.adapters.base import AgentAdapter, AgentInvocation, AgentOutput, AgentUsage
+from agentbench.models import AgentSpec, BenchmarkSpec, Evaluation, HiddenEvaluationSpec
 from agentbench.runner import run_benchmark
 
 STUB_WRITES_FILE = (
@@ -131,7 +133,7 @@ class TestRunBenchmark:
             workspace_parent=tmp_path / "workspaces",
         )
 
-        assert outcome.result.overall["status"] == "failed"
+        assert outcome.result.overall["status"] == "evaluation_failed"
         assert outcome.result.evaluations[0]["passed"] is False
 
     def test_agent_failure_is_recorded_but_evaluations_still_decide(self, bench_spec, tmp_path):
@@ -151,7 +153,7 @@ class TestRunBenchmark:
         )
 
         assert outcome.result.agent["exit_code"] == 3
-        assert outcome.result.overall["status"] == "failed"
+        assert outcome.result.overall["status"] == "agent_failed"
 
     def test_idle_agent_leaves_empty_diff(self, bench_spec, tmp_path):
         outcome = run_benchmark(
@@ -162,7 +164,7 @@ class TestRunBenchmark:
         )
 
         assert outcome.result.diff["files_changed"] == 0
-        assert outcome.result.overall["status"] == "failed"  # checker file missing
+        assert outcome.result.overall["status"] == "evaluation_failed"  # checker file missing
 
     def test_adapter_error_propagates_but_workspace_still_cleaned(self, bench_spec, tmp_path):
         workspace_parent = tmp_path / "workspaces"
@@ -217,6 +219,6 @@ class TestRunBenchmark:
         )
 
         assert outcome.result.agent["timed_out"] is True
-        assert outcome.result.overall["status"] == "failed"
+        assert outcome.result.overall["status"] == "agent_timeout"
         assert (outcome.run_dir / "result.json").exists()
         assert list(workspace_parent.iterdir()) == []

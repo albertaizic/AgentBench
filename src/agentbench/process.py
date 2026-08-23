@@ -79,6 +79,7 @@ def _execute(
     cwd: Path,
     timeout: float | None,
     input_text: str | None,
+    env: dict[str, str] | None = None,
 ) -> ProcessResult:
     popen_kwargs: dict = {
         "cwd": cwd,
@@ -91,7 +92,7 @@ def _execute(
         "encoding": "utf-8",
         "errors": "replace",  # agent output may contain arbitrary bytes
         "shell": shell,
-        "env": _child_env(),
+        "env": env if env is not None else _child_env(),
     }
     if os.name != "nt":
         # Own process group so the whole tree can be signalled at once.
@@ -143,6 +144,8 @@ def run_shell_command(
     *,
     cwd: Path,
     timeout: float | None = None,
+    env: dict[str, str] | None = None,
 ) -> ProcessResult:
     """Run *command* through the platform shell (used for evaluation commands)."""
-    return _execute(command, shell=True, cwd=cwd, timeout=timeout, input_text=None)
+    resolved_env = env if env is not None else _child_env()
+    return _execute(command, shell=True, cwd=cwd, timeout=timeout, input_text=None, env=resolved_env)

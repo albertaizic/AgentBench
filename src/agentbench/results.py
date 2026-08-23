@@ -1,4 +1,9 @@
-"""Serialize run results: one JSON summary plus sidecar logs for raw output."""
+"""Serialize run results: one JSON summary plus sidecar logs for raw output.
+
+``result.json`` is schema-versioned evidence (``schema_version`` field); the
+SQLite index in :mod:`agentbench.storage` is a derived query layer over these
+files, never a replacement for them.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 
 
 class RunResult(BaseModel):
@@ -20,16 +25,26 @@ class RunResult(BaseModel):
 
     Bulky raw output (agent streams, eval logs, the patch) lives in sidecar
     files next to ``result.json`` and is referenced by path, keeping the JSON
-    machine-readable at a glance.
+    machine-readable at a glance. Sections hold plain dicts so the format
+    stays agent-independent.
     """
 
     schema_version: int = SCHEMA_VERSION
-    benchmark: dict[str, Any]
-    agent: dict[str, Any]
+    run_id: str
+    trial: int | None = None
+    benchmark: dict[str, Any]  # name/repository/commit/resolved_commit/config_hash
+    agent: dict[str, Any]  # type/exit_code/timed_out/duration_seconds/model/capabilities
+    usage: dict[str, Any] | None = None  # tokens/cost/turns/session — None when unavailable
     diff: dict[str, Any]
     evaluations: list[dict[str, Any]]
-    overall: dict[str, Any]
+    hidden_evaluations: list[dict[str, Any]] = []
+    protected_paths: dict[str, Any] | None = None
+    overall: dict[str, Any]  # status/failure_reason/started_at/finished_at/duration_seconds
+    execution: dict[str, Any] | None = None  # backend provenance (host/docker)
     environment: dict[str, Any]
+    config: dict[str, Any]  # snapshot of the BenchmarkSpec used
+    experiment_id: str | None = None
+    config_name: str | None = None
     workspace_kept: bool = False
     workspace_path: str | None = None
 
@@ -41,7 +56,7 @@ class RunArtifacts:
     agent_stdout: str
     agent_stderr: str
     patch: str
-    eval_outputs: dict[str, tuple[str, str]] = field(default_factory=dict)  # name -> (stdout, stderr)
+    eval_outputs: dict[str, tuple[str, str]] = field(default_factory=dict)  # stem -> (stdout, stderr)
 
 
 def _eval_slug(name: str) -> str:
@@ -57,20 +72,31 @@ def eval_artifact_stem(index: int, name: str) -> str:
     return f"{index:03d}-{_eval_slug(name)}"
 
 
-def write_run(result: RunResult, artifacts: RunArtifacts, *, results_root: Path) -> Path:
-    """Write ``result.json`` and sidecars under a fresh timestamped run dir."""
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_dir = results_root / result.benchmark["name"] / f"{stamp}-{uuid.uuid4().hex[:6]}"
+def write_run(
+    result: RunResult,
+    artifacts: RunArtifacts,
+    *,
+    results_root: Path,
+    run_dir_name: str | None = None,
+) -> Path:
+    """Write ``result.json`` and sidecars under a fresh timestamped run dir.
+
+    ``run_dir_name`` pins the directory name to the result's own run id;
+    when omitted, a fresh timestamped name is generated (standalone use).
+    """
+    if run_dir_name is None:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        run_dir_name = f"{stamp}-{uuid.uuid4().hex[:6]}"
+    run_dir = results_root / result.benchmark["name"] / run_dir_name
     (run_dir / "evals").mkdir(parents=True, exist_ok=True)
 
     (run_dir / "agent.stdout.log").write_text(artifacts.agent_stdout, encoding="utf-8")
     (run_dir / "agent.stderr.log").write_text(artifacts.agent_stderr, encoding="utf-8")
     (run_dir / "diff.patch").write_text(artifacts.patch, encoding="utf-8")
 
-    for name, (stdout, stderr) in artifacts.eval_outputs.items():
-        slug = _eval_slug(name)
-        (run_dir / "evals" / f"{slug}.stdout.log").write_text(stdout, encoding="utf-8")
-        (run_dir / "evals" / f"{slug}.stderr.log").write_text(stderr, encoding="utf-8")
+    for stem, (stdout, stderr) in artifacts.eval_outputs.items():
+        (run_dir / "evals" / f"{stem}.stdout.log").write_text(stdout, encoding="utf-8")
+        (run_dir / "evals" / f"{stem}.stderr.log").write_text(stderr, encoding="utf-8")
 
     payload = result.model_dump(mode="json")
     (run_dir / "result.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

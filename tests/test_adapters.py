@@ -39,6 +39,8 @@ class TestClaudeCodeAdapter:
         assert invocation.argv[0] == "claude"
         assert "--print" in invocation.argv  # headless print mode
         assert "--dangerously-skip-permissions" in invocation.argv  # unattended edits
+        assert "--output-format" in invocation.argv  # structured result for metrics
+        assert invocation.argv[invocation.argv.index("--output-format") + 1] == "json"
 
     def test_prompt_is_delivered_via_stdin_not_argv(self):
         # Long prompts blow past Windows command-line length limits, and
@@ -104,3 +106,62 @@ class TestClaudeCodeIsolation:
         invocation = self.build(extra_args=["--model", "sonnet"])
 
         assert invocation.argv.index("--strict-mcp-config") < invocation.argv.index("--model")
+
+
+class TestClaudeOutputParsing:
+    """Parsing of the real ``--output-format json`` envelope (v2.1.239 shape)."""
+
+    ENVELOPE = json.dumps(
+        {
+            "is_error": False,
+            "duration_ms": 77712,
+            "num_turns": 3,
+            "session_id": "071f1e80-1134-4097-9956-852c53f83b92",
+            "total_cost_usd": 0.149622,
+            "usage": {
+                "input_tokens": 28330,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 64000,
+                "output_tokens": 38,
+            },
+            "modelUsage": {
+                "claude-sonnet-5": {"inputTokens": 29098, "costUSD": 0.149622},
+            },
+            "result": "did the work",
+            "subtype": "success",
+        }
+    )
+
+    def parse(self, stdout: str):
+        return ClaudeCodeAdapter().parse_output(stdout)
+
+    def test_extracts_real_usage_metrics(self):
+        parsed = self.parse(self.ENVELOPE)
+
+        assert parsed.usage.input_tokens == 28330
+        assert parsed.usage.output_tokens == 38
+        # Total counts cache traffic too — it is real token consumption.
+        assert parsed.usage.total_tokens == 28330 + 38 + 64000
+        assert parsed.usage.cost_usd == 0.149622
+        assert parsed.usage.num_turns == 3
+        assert parsed.usage.session_id == "071f1e80-1134-4097-9956-852c53f83b92"
+
+    def test_model_from_model_usage_block(self):
+        assert self.parse(self.ENVELOPE).model == "claude-sonnet-5"
+
+    def test_stub_or_plain_text_output_yields_none(self):
+        assert self.parse("agent done\n") is None
+        assert self.parse("") is None
+        assert self.parse('{"unrelated": true}') is None
+
+    def test_truncated_json_yields_none_not_error(self):
+        assert self.parse('{"usage": {"input_tokens"') is None
+
+    def test_missing_optional_fields_stay_none(self):
+        minimal = json.dumps({"usage": {}})
+        usage = self.parse(minimal).usage
+
+        assert usage.input_tokens is None
+        assert usage.output_tokens is None
+        assert usage.total_tokens is None
+        assert usage.cost_usd is None

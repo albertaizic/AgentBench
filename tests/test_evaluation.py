@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 import sys
+import textwrap
 
-from agentbench.evaluation import EvaluationOutcome, overall_status, run_evaluation
+from agentbench.evaluation import (
+    EvaluationOutcome,
+    overall_status,
+    run_evaluation,
+    run_hidden_evaluation,
+    substitute_placeholders,
+)
 from agentbench.models import Evaluation
 
 
@@ -70,3 +77,73 @@ class TestOverallStatus:
 
     def test_no_evaluations_cannot_pass(self):
         assert overall_status([]) == "failed"
+
+
+class TestPlaceholders:
+    def test_workspace_python_and_hidden_dir_substituted(self, tmp_path):
+        hidden = tmp_path / "hidden"
+        command = '"{python}" -m pytest "{hidden_dir}" --rootdir={workspace}'
+
+        resolved = substitute_placeholders(
+            command,
+            workspace=tmp_path / "ws",
+            hidden_dir=hidden,
+            python_executable="py.exe",
+        )
+
+        assert str(tmp_path / "ws") in resolved
+        assert str(hidden) in resolved
+        assert "py.exe" in resolved
+        assert "{" not in resolved
+
+    def test_plain_commands_pass_through_unchanged(self, tmp_path):
+        assert substitute_placeholders("pytest -q", workspace=tmp_path) == "pytest -q"
+
+
+class TestHiddenEvaluationIsolation:
+    def test_runs_in_hidden_dir_and_imports_workspace_code(self, tmp_path):
+        # Workspace contains the package under test; the hidden evaluator
+        # lives outside it and imports it via PYTHONPATH.
+        package_dir = tmp_path / "workspace"
+        (package_dir / "stockflow").mkdir(parents=True)
+        (package_dir / "stockflow" / "__init__.py").write_text("VALUE = 41\n", encoding="utf-8")
+        hidden_dir = tmp_path / "hidden"
+        hidden_dir.mkdir()
+        (hidden_dir / "test_behavior.py").write_text(
+            textwrap.dedent(
+                """
+                import os
+                from pathlib import Path
+
+                from stockflow import VALUE
+
+
+                def test_value():
+                    assert VALUE == 41
+
+
+                def test_cwd_is_hidden_dir():
+                    Path("seen_from").write_text(os.getcwd())
+                """
+            ),
+            encoding="utf-8",
+        )
+        evaluation = Evaluation(name="behavioral", command='"{python}" -m pytest -q')
+
+        outcome = run_hidden_evaluation(evaluation, workspace=package_dir, hidden_dir=hidden_dir, timeout=60)
+
+        assert outcome.passed is True, outcome.stdout + outcome.stderr
+        # Proof the evaluator ran from OUTSIDE the agent workspace:
+        assert (hidden_dir / "seen_from").exists()
+
+    def test_hidden_sources_never_appear_in_the_workspace(self, tmp_path):
+        package_dir = tmp_path / "workspace"
+        package_dir.mkdir()
+        hidden_dir = tmp_path / "hidden"
+        hidden_dir.mkdir()
+        (hidden_dir / "test_secret.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
+        evaluation = Evaluation(name="hidden-check", command='"{python}" -m pytest -q')
+
+        run_hidden_evaluation(evaluation, workspace=package_dir, hidden_dir=hidden_dir, timeout=60)
+
+        assert list(package_dir.iterdir()) == []  # nothing copied into the workspace
