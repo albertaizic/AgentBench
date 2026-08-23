@@ -217,5 +217,12 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Generated benchmark fixture repositories (recreate via create_fixture.py)
+benchmarks/*/fixture/
+
 # Local development tooling
 .serena/
+
+# Run evidence + derived SQLite index (JSON under results/ is machine-local;
+# history/comparison are rebuildable via rescan, exports via `agentbench export`)
+results/
