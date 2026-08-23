@@ -1,0 +1,23 @@
+name: python-agents
+# Benchmark names resolve through `agentbench benchmark list` discovery.
+benchmarks:
+  - stockflow
+  - ledgerpad
+  - jobqueue
+
+configs:
+  - name: claude-default
+    agent:
+      type: claude-code
+  # GenericCommandAdapter stub for pipeline validation without model cost.
+  # It "solves" nothing; it exists to exercise the matrix mechanics and the
+  # deterministic failure path of every benchmark.
+  - name: noop-agent
+    agent:
+      type: command
+      argv: ["{python}", "-c", "import sys; sys.stdin.read(); print('no-op agent')"]
+
+repeat: 3
+execution:
+  backend: host
+results_dir: results
