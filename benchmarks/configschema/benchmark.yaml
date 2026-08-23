@@ -1,0 +1,39 @@
+name: configschema
+repository: fixture
+commit: 40e7a94a7704236356da8d213578cb53e9704a5b
+description: |
+  A strict-mode config loader was added but its default is lenient and two
+  call sites were never migrated. Propagate strict loading through every
+  caller while keeping valid configs working.
+prompt: |
+  We added a strict key-checking mode to the config loader, but it defaults
+  to off and not every part of the codebase uses it. As a result, configs
+  with typo'd keys (e.g. "prot" instead of "port") silently fall back to
+  defaults in some code paths.
+
+  Make strict checking the DEFAULT behavior of load_config, and make sure
+  every caller (server settings and the CLI describe helper) goes through
+  that strict path. Valid configs must keep working exactly as before.
+  The public test suite contains failing tests describing this.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: propagation-checks
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: api-change
+tags: [cross-file, defaults]
+language: python
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

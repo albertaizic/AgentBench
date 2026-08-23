@@ -1,0 +1,55 @@
+diff --git a/fuzzysearch/search.py b/fuzzysearch/search.py
+index d933c1a..8238e12 100644
+--- a/fuzzysearch/search.py
++++ b/fuzzysearch/search.py
+@@ -13,20 +13,41 @@ class ComparisonCounter:
+         self.comparisons += 1
+ 
+ 
++def _failure_function(needle: str, counter) -> list[int]:
++    table = [0] * len(needle)
++    k = 0
++    for position in range(1, len(needle)):
++        while k > 0:
++            counter.record()
++            if needle[position] == needle[k]:
++                break
++            k = table[k - 1]
++        counter.record()
++        if needle[position] == needle[k]:
++            k += 1
++        table[position] = k
++    return table
++
++
+ def substring_count(haystack: str, needle: str,
+-                    counter: ComparisonCounter | None = None) -> int:
+-    """Count (possibly overlapping) occurrences of needle in haystack."""
++                    counter=None) -> int:
++    """Count (possibly overlapping) occurrences via KMP: O(n + m)."""
+     counter = counter or ComparisonCounter()
+-    if not needle:
++    if not needle or len(needle) > len(haystack):
+         return 0
++    table = _failure_function(needle, counter)
+     count = 0
+-    for start in range(len(haystack) - len(needle) + 1):
+-        matched = True
+-        for offset, expected in enumerate(needle):
++    matched = 0
++    for character in haystack:
++        while matched > 0:
+             counter.record()
+-            if haystack[start + offset] != expected:
+-                matched = False
++            if character == needle[matched]:
+                 break
+-        if matched:
++            matched = table[matched - 1]
++        counter.record()
++        if character == needle[matched]:
++            matched += 1
++        if matched == len(needle):
+             count += 1
++            matched = table[matched - 1]
+     return count

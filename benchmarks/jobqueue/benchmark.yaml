@@ -1,0 +1,40 @@
+name: jobqueue
+repository: fixture
+commit: f252c9eaf5f41250314945d165f26a9f709bcb31
+description: |
+  The priority queue drains jobs sorted by their priority rendered as a
+  string, so numeric priorities order lexicographically (10 before 9) and
+  equal-priority jobs come out in reverse submission order.
+prompt: |
+  Our job queue is draining work in the wrong order. Two symptoms:
+
+  1. A job with priority 10 has been observed running BEFORE a job with
+     priority 9.
+  2. When several jobs share the same priority, they no longer run in the
+     order they were submitted.
+
+  Fix the queue so that drain() returns jobs ordered by numeric priority
+  (lower first), with ties broken by submission order. Keep drain()
+  emptying the queue. Failing public tests describe the contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: ordering-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [ordering, deterministic]
+language: python
+difficulty: easy
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

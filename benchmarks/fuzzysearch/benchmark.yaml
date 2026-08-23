@@ -1,0 +1,42 @@
+name: fuzzysearch
+repository: fixture
+commit: 099a81fae7271e4beba01210f85790ad483b4de9
+description: |
+  Substring counting is a naive nested scan; on adversarial inputs it makes
+  quadratic comparisons. Rewrite with a linear-time algorithm while keeping
+  the public API (including the optional counter hook) intact.
+prompt: |
+  Our substring_count helper is used on very large texts and profiling shows
+  a classic naive nested scan: for each position in the haystack it compares
+  characters one by one against the needle. On inputs like "aaaa…" this
+  degrades badly.
+
+  Reimplement substring_count so the total number of character comparisons
+  stays proportional to len(haystack) + len(needle) even in the worst case.
+  Keep the public API exactly as-is, including the optional ComparisonCounter
+  argument that records every comparison — our evaluators rely on it.
+
+  Behavior must not change: overlapping matches are counted. Public tests
+  pass today and must keep passing; correctness comes first.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: complexity-budget
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: performance
+tags: [algorithm, complexity]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+results_dir: results

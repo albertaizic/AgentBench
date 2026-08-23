@@ -1,0 +1,43 @@
+name: prefsfile
+repository: fixture
+commit: 372dd56cdc1b2a584eb1caadc3065e414b3952e6
+description: |
+  The settings loader mishandles legacy v1 files: missing "schema" keys,
+  boolean values stored as strings, and unknown future versions are not
+  handled. Implement proper per-version normalization.
+prompt: |
+  After shipping settings schema v2 we still have users whose config files
+  were written by v1 clients. Those files either lack the "schema" key
+  entirely or store booleans as the strings "true"/"false". The loader now
+  crashes or returns wrong types for such files.
+
+  Make load_settings:
+  - treat files without a "schema" key as version 1;
+  - coerce v1 string booleans ("true"/"false", case-insensitive) to real
+    booleans and numeric strings to ints;
+  - reject versions it does not know with ValueError;
+  - always return every default key even when the file omits them.
+
+  The public tests include failures that describe this contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: versioning-checks
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [serialization, versioning]
+language: python
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

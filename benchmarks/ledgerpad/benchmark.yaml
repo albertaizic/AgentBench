@@ -1,0 +1,43 @@
+name: ledgerpad
+repository: fixture
+commit: 536c85ac7f07d8e8f0b17863bb32e24ce5ae696a
+description: |
+  An expense tracker accepts zero, negative, and unknown-currency expenses,
+  corrupting per-currency totals. Add proper validation at the single entry
+  point without breaking per-currency totals.
+prompt: |
+  Users of ledgerpad report corrupted totals: expenses with zero or negative
+  amounts are recorded (a "0" entry wipes out reconciliation), and expenses
+  typed with unknown or lowercase currency codes (e.g. "btc", "eur") are
+  accepted silently.
+
+  Make add_expense reject:
+  - non-positive amounts (ValueError), and
+  - currency codes not in VALID_CURRENCIES, compared case-insensitively
+    (ValueError).
+
+  Invalid expenses must not be recorded. Keep the existing per-currency
+  totals behavior working. The public test suite contains failing tests that
+  must pass when you are done.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: behavioral-checks
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [validation, boundary]
+language: python
+difficulty: easy
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

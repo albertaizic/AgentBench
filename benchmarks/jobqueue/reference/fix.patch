@@ -1,0 +1,24 @@
+diff --git a/jobqueue/queue.py b/jobqueue/queue.py
+index a68477b..e363848 100644
+--- a/jobqueue/queue.py
++++ b/jobqueue/queue.py
+@@ -2,7 +2,7 @@
+ 
+ from __future__ import annotations
+ 
+-from dataclasses import dataclass, field
++from dataclasses import dataclass
+ 
+ 
+ @dataclass
+@@ -24,6 +24,9 @@ class JobQueue:
+         return job
+ 
+     def drain(self) -> list[Job]:
+-        ordered = sorted(self._jobs, key=lambda j: str(j.priority))
++        ordered = sorted(
++            self._jobs,
++            key=lambda job: (int(job.priority), job.seq),
++        )
+         self._jobs.clear()
+         return ordered

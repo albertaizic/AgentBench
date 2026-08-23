@@ -1,0 +1,24 @@
+diff --git a/stockflow/reservations.py b/stockflow/reservations.py
+index 3c70fb7..e1df9b2 100644
+--- a/stockflow/reservations.py
++++ b/stockflow/reservations.py
+@@ -22,12 +22,16 @@ class ReservationRegistry:
+         self._by_order: dict[str, Reservation] = {}
+ 
+     def reserve(self, order_id: str, sku: str, quantity: int) -> Reservation:
+-        if order_id in self._by_order:
+-            return self._by_order[order_id]
++        key = order_id.strip().casefold()
++        if key in self._by_order:
++            return self._by_order[key]
++        if quantity <= 0:
++            raise ValueError("quantity must be positive")
+         level = self._catalog.available(sku)
+         if quantity > level:
+             raise ValueError(f"insufficient stock for {sku}")
+         self._feed.consume(sku, quantity)
++        self._catalog.invalidate()
+         reservation = Reservation(order_id=order_id, sku=sku, quantity=quantity)
+-        self._by_order[order_id] = reservation
++        self._by_order[key] = reservation
+         return reservation
