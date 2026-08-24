@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import errno
 import os
+import shutil
 import stat
 
 import pytest
 
 from conftest import run_git
-from agentbench.workspace import Workspace, WorkspaceError, create_workspace, remove_tree
+from agentbench.workspace import (
+    Workspace,
+    WorkspaceError,
+    _on_readonly,
+    create_workspace,
+    remove_tree,
+)
 
 
 class TestCreateWorkspace:
@@ -87,12 +95,94 @@ class TestCleanup:
         # Git object files are read-only; a naive rmtree fails on Windows.
         repo_path, sha = local_repo
         ws = create_workspace(str(repo_path), sha)
-        target = next((ws.path / ".git" / "objects").rglob("*"))
+        # Files only: rglob also yields directories, and on Linux the first
+        # match was a fan-out directory (e.g. objects/a7) — chmodding that to
+        # S_IREAD strips its traversal bit, silently changing the scenario.
+        target = next(
+            p for p in (ws.path / ".git" / "objects").rglob("*") if p.is_file()
+        )
         os.chmod(target, stat.S_IREAD)
 
         ws.cleanup()
 
         assert not ws.path.exists()
+
+    def test_cleanup_removes_non_traversable_directory(self, local_repo):
+        # A read-only directory loses its traversal (x) bit on POSIX, which
+        # blocks fd-based rmtree from even opening it. AgentBench owns the
+        # whole workspace, so cleanup must clear that too.
+        repo_path, sha = local_repo
+        ws = create_workspace(str(repo_path), sha)
+        locked = ws.path / "locked-dir"
+        locked.mkdir()
+        (locked / "payload.bin").write_bytes(b"x")
+        os.chmod(locked, stat.S_IREAD)
+
+        ws.cleanup()
+
+        assert not ws.path.exists()
+
+    @pytest.mark.skipif(os.name == "nt", reason="fd-based rmtree walk is POSIX-only")
+    def test_posix_non_traversable_dir_defeats_naive_rmtree(self, local_repo):
+        # Proves the CI scenario is real on Linux: plain rmtree cannot delete
+        # a workspace containing a non-traversable directory.
+        repo_path, sha = local_repo
+        ws = create_workspace(str(repo_path), sha)
+        locked = ws.path / ".git" / "objects" / "zz"
+        locked.mkdir()
+        (locked / "object").write_bytes(b"x")
+        os.chmod(locked, stat.S_IREAD)
+
+        with pytest.raises(OSError):
+            shutil.rmtree(ws.path)
+
+    def test_onexc_handler_redoes_failed_directory_open(self, tmp_path):
+        # Exact shape of the Linux CI crash: the fd-based walk reports a
+        # directory it cannot open as onexc(os.open, path, err). The old
+        # handler called func(path), i.e. os.open(path) without flags ->
+        # "TypeError: open() missing required argument 'flags'".
+        locked = tmp_path / "a7"
+        locked.mkdir()
+        (locked / "object").write_bytes(b"x")
+        exc = OSError(errno.EACCES, "Permission denied")
+        exc.filename = str(locked)
+
+        _on_readonly(os.open, str(locked), exc)
+
+        assert not locked.exists()
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows readonly-attribute semantics")
+    def test_windows_readonly_file_is_removed(self, tmp_path):
+        victim = tmp_path / "ro.txt"
+        victim.write_text("x", encoding="utf-8")
+        os.chmod(victim, stat.S_IREAD)
+
+        remove_tree(tmp_path)
+
+        assert not tmp_path.exists()
+
+    def test_remove_tree_removes_normal_tree(self, tmp_path):
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "f.txt").write_text("x", encoding="utf-8")
+
+        remove_tree(tmp_path)
+
+        assert not tmp_path.exists()
+
+    def test_unexpected_errors_are_not_swallowed(self, tmp_path, monkeypatch):
+        # Only transient OS errors deserve the retry/backoff treatment; a
+        # non-OSError from inside the handler must surface immediately.
+        victim = tmp_path / "ro.txt"
+        victim.write_text("x", encoding="utf-8")
+        os.chmod(victim, stat.S_IREAD)
+
+        def broken_chmod(path, mode):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(os, "chmod", broken_chmod)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            remove_tree(tmp_path)
 
     def test_context_manager_cleans_up_after_body_exception(self, local_repo):
         repo_path, sha = local_repo

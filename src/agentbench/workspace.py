@@ -92,17 +92,42 @@ def _run_git(args: list[str], *, cwd: Path) -> ProcessResult:
     return result
 
 
+def _on_readonly(func, path: str, exc: BaseException) -> None:
+    """``shutil.rmtree`` ``onexc`` handler that clears read-only bits and redoes
+    the failed step.
+
+    ``func`` is whichever stdlib operation failed, and its signature varies by
+    platform and rmtree implementation: the POSIX fd-based walk reports
+    failures from ``os.lstat``/``os.open``/``os.scandir``, while the fallback
+    walk used on Windows reports ``os.unlink``/``os.rmdir``/``os.scandir``.
+    Only some of those take a single argument — ``os.open`` needs flags — so
+    each supported case is redone explicitly instead of a blind ``func(path)``
+    (Python 3.12 shutil semantics: when the handler returns, rmtree does *not*
+    retry; the handler owns redoing the operation).
+    """
+    st = os.lstat(path)  # lstat, never stat: do not follow symlinks out of the workspace
+    if stat.S_ISLNK(st.st_mode):
+        raise exc  # symlink handling stays shutil's business; never chmod through a link
+    os.chmod(path, stat.S_IRWXU)  # owner rwx: writable file, traversable directory
+    if func is os.close:
+        return  # draining an fd whose subtree is already gone; nothing to repair
+    if func is os.open:
+        # POSIX fd-based walk could not open this directory, so none of its
+        # frames were pushed and nothing inside has been visited yet. Clear
+        # the subtree here; the outer walk finds it gone when removing parents.
+        remove_tree(Path(path))
+        return
+    func(path)  # os.unlink / os.rmdir / os.lstat / os.scandir / ...
+
+
 def remove_tree(path: Path) -> None:
     """rmtree that survives read-only bits and transient locks.
 
     Antivirus/indexer processes routinely hold freshly written files for a
     moment on Windows; a single failed attempt would leak the workspace, so
-    deletion retries with a short backoff before giving up.
+    deletion retries with a short backoff before giving up. Only OSError is
+    retried — anything else is a real bug and surfaces immediately.
     """
-
-    def _on_readonly(func, target: str, _exc: BaseException) -> None:
-        os.chmod(target, stat.S_IWRITE)
-        func(target)
 
     for delay in (0.1, 0.3, 0.9):
         try:
