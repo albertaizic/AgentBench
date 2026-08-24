@@ -236,7 +236,8 @@ class TestMaxRunsHardCap:
         monkeypatch.setattr("agentbench.cli.find_manifest", lambda name, extra_root=None: manifest)
         monkeypatch.chdir(tmp_path)
 
-        start_log = tmp_path / "starts.log"
+        starts_dir = tmp_path / "starts"
+        starts_dir.mkdir()
         tail = (
             "sys.stdin.read()\npathlib.Path('agent_change.txt').write_text('x')\n"
             if agent_creates_file
@@ -244,9 +245,10 @@ class TestMaxRunsHardCap:
         )
         agent_script = tmp_path / "counting_agent.py"
         agent_script.write_text(
-            "import pathlib, sys\n"
-            f"with pathlib.Path('{start_log.as_posix()}').open('a', encoding='utf-8') as fh:\n"
-            "    fh.write('start\\n')\n"
+            "import pathlib, sys, uuid\n"
+            f"starts_dir = pathlib.Path({starts_dir.as_posix()!r})\n"
+            "(starts_dir / f'{uuid.uuid4().hex}.start').write_text("
+            "'start', encoding='utf-8')\n"
             + tail,
             encoding="utf-8",
         )
@@ -268,17 +270,21 @@ class TestMaxRunsHardCap:
             ),
             encoding="utf-8",
         )
-        return tmp_path, yaml_path, start_log
+        return tmp_path, yaml_path, starts_dir
 
     @pytest.fixture
     def four_cell_env(self, tmp_path, bench_repo, monkeypatch):
         return self.make_env(tmp_path, bench_repo, monkeypatch, agent_creates_file=True)
 
     @staticmethod
-    def starts(start_log: Path) -> int:
-        if not start_log.exists():
+    def starts(starts_dir: Path) -> int:
+        if not starts_dir.exists():
             return 0
-        return len(start_log.read_text(encoding="utf-8").splitlines())
+        return sum(
+            1
+            for marker in starts_dir.glob("*.start")
+            if marker.is_file()
+        )
 
     @staticmethod
     def load_manifest(tmp_path: Path, experiment_id: str | None = None) -> dict:
@@ -287,39 +293,39 @@ class TestMaxRunsHardCap:
         return json.loads((dir_ / "experiment.json").read_text(encoding="utf-8"))
 
     def test_jobs2_maxruns2_executes_exactly_two_of_four(self, four_cell_env):
-        tmp_path, yaml_path, start_log = four_cell_env
+        tmp_path, yaml_path, starts_dir = four_cell_env
 
         result = runner.invoke(
             app, ["experiment", str(yaml_path), "--jobs", "2", "--max-runs", "2"],
         )
 
         assert result.exit_code == 0, result.output
-        assert self.starts(start_log) == 2  # real process launches, not bookkeeping
+        assert self.starts(starts_dir) == 2  # real process launches, not bookkeeping
         assert len(list((tmp_path / "results").glob("**/result.json"))) == 2
         assert "Stopped after 2 executed run(s)" in result.output
         assert len(self.load_manifest(tmp_path)["completed"]) == 2
 
     def test_jobs4_maxruns1_starts_exactly_one(self, four_cell_env):
-        tmp_path, yaml_path, start_log = four_cell_env
+        tmp_path, yaml_path, starts_dir = four_cell_env
 
         result = runner.invoke(
             app, ["experiment", str(yaml_path), "--jobs", "4", "--max-runs", "1"],
         )
 
         assert result.exit_code == 0, result.output
-        assert self.starts(start_log) == 1
+        assert self.starts(starts_dir) == 1
         assert "Stopped after 1 executed run(s)" in result.output
         assert len(self.load_manifest(tmp_path)["completed"]) == 1
 
     def test_capped_runs_then_resume_chain_finishes_without_duplicates(self, four_cell_env):
-        tmp_path, yaml_path, start_log = four_cell_env
+        tmp_path, yaml_path, starts_dir = four_cell_env
 
         first = runner.invoke(
             app, ["experiment", str(yaml_path), "--jobs", "2", "--max-runs", "2"],
         )
         assert first.exit_code == 0, first.output
         experiment_id = next((tmp_path / "results" / "experiments").iterdir()).name
-        assert self.starts(start_log) == 2
+        assert self.starts(starts_dir) == 2
 
         # Resume with a cap: completed cells are skipped, exactly ONE new cell.
         second = runner.invoke(
@@ -328,7 +334,7 @@ class TestMaxRunsHardCap:
              "--jobs", "2", "--max-runs", "1"],
         )
         assert second.exit_code == 0, second.output
-        assert self.starts(start_log) == 3
+        assert self.starts(starts_dir) == 3
         assert second.output.count("already complete") == 2
         assert "Stopped after 1 executed run(s)" in second.output
 
@@ -337,7 +343,7 @@ class TestMaxRunsHardCap:
             app, ["experiment", str(yaml_path), "--resume", experiment_id, "--jobs", "2"],
         )
         assert third.exit_code == 0, third.output
-        assert self.starts(start_log) == 4
+        assert self.starts(starts_dir) == 4
         assert "Stopped after" not in third.output
 
         record = self.load_manifest(tmp_path, experiment_id)
@@ -346,7 +352,7 @@ class TestMaxRunsHardCap:
         assert len(keys) == len(set(keys)), "resume must not duplicate cells"
 
     def test_failing_cells_count_against_the_cap(self, tmp_path, bench_repo, monkeypatch):
-        tmp_path, yaml_path, start_log = self.make_env(
+        tmp_path, yaml_path, starts_dir = self.make_env(
             tmp_path, bench_repo, monkeypatch, agent_creates_file=False,
         )
 
@@ -355,7 +361,7 @@ class TestMaxRunsHardCap:
         )
 
         assert result.exit_code == 0, result.output
-        assert self.starts(start_log) == 1  # the failure was a real execution
+        assert self.starts(starts_dir) == 1  # the failure was a real execution
         assert "Stopped after 1 executed run(s)" in result.output
         cells = self.load_manifest(tmp_path)["completed"]
         assert len(cells) == 1
