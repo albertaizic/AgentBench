@@ -10,6 +10,7 @@ import stat
 import pytest
 
 from conftest import run_git
+from agentbench import workspace as workspace_mod
 from agentbench.workspace import (
     Workspace,
     WorkspaceError,
@@ -107,6 +108,11 @@ class TestCleanup:
 
         assert not ws.path.exists()
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="read-only directories only lose their traversal bit on POSIX; "
+        "on Windows this would degenerate into a second normal-cleanup test",
+    )
     def test_cleanup_removes_non_traversable_directory(self, local_repo):
         # A read-only directory loses its traversal (x) bit on POSIX, which
         # blocks fd-based rmtree from even opening it. AgentBench owns the
@@ -170,11 +176,45 @@ class TestCleanup:
         assert not tmp_path.exists()
 
     def test_unexpected_errors_are_not_swallowed(self, tmp_path, monkeypatch):
-        # Only transient OS errors deserve the retry/backoff treatment; a
-        # non-OSError from inside the handler must surface immediately.
-        victim = tmp_path / "ro.txt"
+        # A non-OSError escaping AgentBench's recovery path must propagate
+        # immediately: only OSError earns the retry/backoff treatment. The
+        # failure is delivered through shutil's own reporting seam (stubbed,
+        # since whether deleting a read-only regular file invokes the handler
+        # at all is OS-dependent — verified on linux 3.12: zero calls).
+        (tmp_path / "some_file.txt").write_text("x", encoding="utf-8")
+        hooks: list = []
+
+        def fake_rmtree(path, **kwargs):
+            # Report one deletion failure exactly as both shutil
+            # implementations do: hand it to the caller's onexc hook.
+            onexc = kwargs["onexc"]
+            hooks.append(onexc)
+            onexc(os.unlink, str(path / "some_file.txt"),
+                  PermissionError(13, "Permission denied"))
+
+        monkeypatch.setattr(workspace_mod.shutil, "rmtree", fake_rmtree)
+
+        recovery_calls: list = []
+
+        def broken_recovery(func, path, exc):
+            recovery_calls.append(path)
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(workspace_mod, "_on_readonly", broken_recovery)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            remove_tree(tmp_path)
+
+        assert len(hooks) == 1
+        assert hooks[0] is broken_recovery
+        assert len(recovery_calls) == 1  # failed fast — no swallow, no retry
+
+    def test_handler_surfaces_its_own_recovery_failure(self, tmp_path, monkeypatch):
+        # Same guarantee one layer down: if the handler's own repair step
+        # (chmod) raises a non-OSError, it must escape, not vanish. Exercised
+        # directly so no platform has to cooperate by making deletion fail.
+        victim = tmp_path / "target.txt"
         victim.write_text("x", encoding="utf-8")
-        os.chmod(victim, stat.S_IREAD)
 
         def broken_chmod(path, mode):
             raise RuntimeError("boom")
@@ -182,7 +222,46 @@ class TestCleanup:
         monkeypatch.setattr(os, "chmod", broken_chmod)
 
         with pytest.raises(RuntimeError, match="boom"):
+            _on_readonly(
+                os.unlink, str(victim), OSError(errno.EACCES, "Permission denied")
+            )
+
+    def test_transient_oserror_is_retried(self, tmp_path, monkeypatch):
+        # Antivirus/indexer locks are why the backoff loop exists: one
+        # transient PermissionError, then success.
+        (tmp_path / "f.txt").write_text("x", encoding="utf-8")
+        calls: list = []
+        real_rmtree = shutil.rmtree
+
+        def flaky(path, **kwargs):
+            calls.append(path)
+            if len(calls) == 1:
+                raise PermissionError(32, "in use by another process")
+            return real_rmtree(path, **kwargs)
+
+        monkeypatch.setattr(workspace_mod.shutil, "rmtree", flaky)
+
+        remove_tree(tmp_path)
+
+        assert not tmp_path.exists()
+        assert len(calls) == 2  # exactly one retry
+
+    def test_persistent_oserror_fails_after_backoff(self, tmp_path, monkeypatch):
+        # When every attempt fails, the last error surfaces to the caller —
+        # the workspace leak is reported, not hidden.
+        (tmp_path / "f.txt").write_text("x", encoding="utf-8")
+        calls: list = []
+
+        def always_locked(path, **kwargs):
+            calls.append(path)
+            raise PermissionError(32, "in use by another process")
+
+        monkeypatch.setattr(workspace_mod.shutil, "rmtree", always_locked)
+
+        with pytest.raises(PermissionError):
             remove_tree(tmp_path)
+
+        assert len(calls) == 4  # three backoff attempts + the final raise-through
 
     def test_context_manager_cleans_up_after_body_exception(self, local_repo):
         repo_path, sha = local_repo
