@@ -4,17 +4,29 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentbench"
-version = "0.1.0"
+version = "0.4.0"
 description = "A reproducible evaluation framework for coding agents."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
+authors = [{ name = "AgentBench maintainers" }]
+keywords = ["evaluation", "benchmark", "coding-agents", "reproducibility", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+]
 dependencies = [
     "typer>=0.12",
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "rich>=13.7",
 ]
+
+[project.urls]
+Documentation = "https://github.com/agentbench/agentbench#readme"
 
 [project.optional-dependencies]
 dev = [
@@ -27,6 +39,18 @@ agentbench = "agentbench.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentbench"]
 
+# Ship the benchmark corpus inside the package so a plain `pip install`
+# finds all manifests via agentbench.discovery without a source checkout.
+[tool.hatch.build.targets.wheel.force-include]
+"benchmarks" = "src/agentbench/benchmarks"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "unit: fast, hermetic tests (default suite)",
+    "integration: multi-component tests without external services",
+    "docker: requires a reachable Docker daemon (excluded in CI by default)",
+    "live_agent: invokes a real coding-agent CLI with real credentials (never in CI)",
+    "slow: long-running tests; deselect with -m 'not slow'",
+]

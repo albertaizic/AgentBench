@@ -33,6 +33,7 @@ import json
 import os
 import re
 import tempfile
+import uuid
 from functools import lru_cache
 from pathlib import Path
 
@@ -44,6 +45,32 @@ from agentbench.process import ProcessResult, resolve_executable, run_command
 DEFAULT_IMAGE = "python:3.12-slim"
 RUN_LABEL = ("label", "org.agentbench.run=true")
 _DOCKER_TIMEOUT = 60.0
+
+# The docker CLI reserves these exit codes for infrastructure problems
+# (125 daemon/CLI error, 126 not executable, 127 not found); a container's
+# own command propagates its real exit code unchanged.
+_INFRASTRUCTURE_EXIT_CODES = {125, 126, 127}
+_INFRASTRUCTURE_MARKERS = (
+    "unable to find image",
+    "pull access denied",
+    "manifest unknown",
+    "no such image",
+    "error response from daemon",
+    "cannot connect to the docker daemon",
+)
+
+
+def is_infrastructure_failure(result: ProcessResult) -> bool:
+    """Whether *result* indicates Docker/setup failure rather than agent failure.
+
+    A missing image, unreachable daemon, or unstartable container is an
+    AgentBench setup problem and must never be scored as ``agent_failed``
+    — the agent process never meaningfully ran.
+    """
+    if result.exit_code in _INFRASTRUCTURE_EXIT_CODES:
+        return True
+    blob = f"{result.stdout}\n{result.stderr}".lower()
+    return any(marker in blob for marker in _INFRASTRUCTURE_MARKERS)
 
 
 def _docker_binary() -> str:
@@ -106,6 +133,11 @@ class DockerExecutionBackend(ExecutionBackend):
         self.image = config.image or DEFAULT_IMAGE
         self._image_id: str | None = None
         self._image_digests: list[str] | None = None
+        # One backend instance per run: a unique, predictable container name is
+        # what makes timeout cleanup possible — killing the host-side docker
+        # CLI does NOT stop the container it started.
+        self.container_name = f"agentbench-{uuid.uuid4().hex[:12]}"
+        self._container_started = False
 
     # -- command construction -------------------------------------------------
 
@@ -116,6 +148,8 @@ class DockerExecutionBackend(ExecutionBackend):
             _docker_binary(),
             "run",
             "--rm",
+            "--name",
+            self.container_name,
             f"--{RUN_LABEL[0]}",
             RUN_LABEL[1],
             "-v",
@@ -152,6 +186,7 @@ class DockerExecutionBackend(ExecutionBackend):
     ) -> ProcessResult:
         argv = [*self.container_args(workspace, interactive=invocation.input_text is not None),
                 self.image, *invocation.argv]
+        self._container_started = True
         result = run_command(argv, cwd=Path.cwd(), timeout=timeout, input_text=invocation.input_text)
         self._record_image_identity()
         return result
@@ -168,6 +203,7 @@ class DockerExecutionBackend(ExecutionBackend):
         # never passed through a HOST shell and never embedded in argv, so no
         # quoting boundary exists between AgentBench and the container.
         argv = [*self.container_args(workspace, interactive=True), self.image, "sh", "-s"]
+        self._container_started = True
         result = run_command(
             argv, cwd=Path.cwd(), timeout=timeout, input_text=command,
         )
@@ -223,4 +259,26 @@ class DockerExecutionBackend(ExecutionBackend):
                 name for name in self.config.pass_env if os.environ.get(name) is not None
             ],
             "container_workspace": CONTAINER_WORKSPACE,
+            "container_name": self.container_name,
         }
+
+    def cleanup(self) -> None:
+        """Force-remove this run's container if it outlived the docker CLI.
+
+        Killing the host-side ``docker run`` process (timeout, interrupt) does
+        not stop the container it started; without this, a timed-out agent
+        keeps running as an orphan holding the workspace bind mount. ``--rm``
+        containers are already gone on the happy path, so a missing-name
+        error here is normal and ignored.
+        """
+        if not self._container_started:
+            return
+        self._container_started = False  # one attempt per started container
+        try:
+            run_command(
+                [_docker_binary(), "rm", "-f", self.container_name],
+                cwd=Path.cwd(),
+                timeout=_DOCKER_TIMEOUT,
+            )
+        except (OSError, RuntimeError):
+            pass  # best effort: cleanup must never mask the run's own outcome

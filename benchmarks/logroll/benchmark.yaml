@@ -1,0 +1,43 @@
+name: logroll
+repository: fixture
+commit: b9ea339b10b978d57c8d08305df241adcfe4f7a9
+description: |
+  Logger accumulates a new handler on every initialization, duplicating
+  every line and leaking file handles; child loggers propagate twice.
+prompt: |
+  Our logging setup duplicates every message once per re-initialization:
+  each call to configure_logger() attaches ANOTHER stream handler to the
+  same logger, so long-running processes emit each line N times after N
+  reloads, and old file handlers are never closed (leaking handles).
+
+  Fix configure_logger() so that:
+  - repeated calls are idempotent: the same configuration never adds a
+    second handler set;
+  - when the configuration DOES change, previous handlers are removed and
+    their close() called before the new ones attach;
+  - propagation to the root logger stays enabled exactly as now.
+
+  The failing public tests pin the contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: handler-hygiene
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [logging, resources]
+suites: [python-core, bugfix]
+language: python
+difficulty: easy
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

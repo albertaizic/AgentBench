@@ -138,10 +138,72 @@ def validate_benchmark(manifest_path: Path, *, work_root: Path | None = None) ->
                             fixed_detail,
                         )
         else:
-            report.add("reference solution present", False, "none declared")
+            # Patch-free grading (e.g. mutation-checked test-writing tasks)
+            # declares no reference solution by design.
+            report.add("reference solution present", True, "none declared (patch-free grading)")
+
     finally:
         import shutil
 
         shutil.rmtree(root, ignore_errors=True)
 
     return report
+
+
+def check_regeneration_determinism(manifest_path: Path) -> tuple[bool, str]:
+    """Re-run the benchmark's fixture generator; the commit sha must not move.
+
+    Generators are deterministic by contract: identical embedded contents,
+    pinned authorship/dates → identical shas on every machine.
+    """
+    import subprocess as sp
+
+    from agentbench.loader import load_benchmark
+
+    benchmark_dir = manifest_path.parent.resolve()
+    generator = benchmark_dir / "create_fixture.py"
+    if not generator.is_file():
+        return False, f"generator missing: {generator}"
+
+    def head(repo: Path) -> str | None:
+        result = sp.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                        capture_output=True, text=True)
+        return result.stdout.strip() or None
+
+    try:
+        before = head(benchmark_dir / "fixture")
+    except Exception:  # noqa: BLE001 - unreadable fixture counts as a mismatch source
+        before = None
+
+    run = sp.run([sys.executable, str(generator)], capture_output=True, text=True)
+    if run.returncode != 0:
+        return False, f"generator failed: {(run.stderr or run.stdout).strip()[:200]}"
+
+    fixture = benchmark_dir / "fixture"
+    after = head(fixture)
+    if after is None:
+        return False, "fixture has no git repository after generation"
+
+    try:
+        spec = load_benchmark(manifest_path)
+        pinned_matches = spec.commit.lower() == after.lower()
+    except Exception as exc:  # noqa: BLE001
+        return False, f"manifest unparsable after generation: {exc}"
+    if not pinned_matches:
+        return False, f"pinned commit {spec.commit[:12]} != generated {after[:12]}"
+    if before is not None and before != after:
+        return False, f"sha moved across regeneration ({before[:12]} → {after[:12]})"
+    return True, f"deterministic at {after[:12]}"
+
+
+def validate_corpus(*, extra_root: Path | None = None) -> list[ValidationReport]:
+    """Validate every discovered benchmark, including regeneration checks."""
+    from agentbench.discovery import discover
+
+    reports: list[ValidationReport] = []
+    for manifest in discover(extra_root):
+        report = validate_benchmark(manifest)
+        regen_ok, regen_detail = check_regeneration_determinism(manifest)
+        report.add("fixture regeneration deterministic", regen_ok, regen_detail)
+        reports.append(report)
+    return reports

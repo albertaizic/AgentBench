@@ -1,0 +1,23 @@
+name: probe-agent-exit
+repository: ../benchmarks/jobqueue/fixture
+commit: f252c9eaf5f41250314945d165f26a9f709bcb31
+description: |
+  TEMPORARY Phase 0B validation artifact: agent exits nonzero immediately;
+  run must classify as agent_failed and leave no containers behind.
+prompt: |
+  Probe: failing agent process.
+agent:
+  type: command
+  argv:
+    - python3
+    - -c
+    - "print('probe: intentional failure'); import sys; sys.exit(3)"
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+timeout_seconds: 120
+results_dir: results
+execution:
+  backend: docker
+  image: agentbench-smoke:py312
+  network: disabled

@@ -1,0 +1,25 @@
+name: probe-agent-timeout
+repository: ../benchmarks/jobqueue/fixture
+commit: f252c9eaf5f41250314945d165f26a9f709bcb31
+description: |
+  TEMPORARY Phase 0B validation artifact: agent sleeps far beyond the
+  timeout; run must classify as agent_timeout and — critically for the
+  Docker backend — the in-container process must not survive as a leaked,
+  still-running container after the host kills the docker CLI.
+prompt: |
+  Probe: agent that never finishes.
+agent:
+  type: command
+  argv:
+    - python3
+    - -c
+    - "import time; print('probe: sleeping'); time.sleep(120)"
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+timeout_seconds: 8
+results_dir: results
+execution:
+  backend: docker
+  image: agentbench-smoke:py312
+  network: disabled

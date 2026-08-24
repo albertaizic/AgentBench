@@ -32,6 +32,7 @@ from agentbench.aggregate import (
     format_count,
     format_duration,
     format_percent,
+    pairwise_statistics,
 )
 from agentbench.discovery import find_manifest
 from agentbench.loader import load_benchmark
@@ -224,7 +225,35 @@ def render_runs(store: DashboardStore, params: dict) -> str:
         limit = max(1, min(1000, int(limit_raw)))
     except ValueError:
         limit = 100
-    rows = store.query(**filters, limit=limit)
+    offset_raw = params.get("offset", ["0"])[0]
+    try:
+        offset = max(0, int(offset_raw))
+    except ValueError:
+        offset = 0
+    # One extra row beyond the page reveals whether a next page exists
+    # without a separate COUNT query over the whole index.
+    rows = store.query(**filters, limit=limit + 1, offset=offset)
+    has_next = len(rows) > limit
+    rows = rows[:limit]
+
+    def page_link(new_offset: int, label: str) -> str:
+        from urllib.parse import urlencode
+
+        query = urlencode({**filters, "limit": limit, "offset": new_offset})
+        return f'<a href="/runs?{query}">{label}</a>'
+
+    pager_parts = []
+    if offset > 0:
+        pager_parts.append(page_link(max(0, offset - limit), f"← prev {limit}"))
+    if has_next:
+        pager_parts.append(page_link(offset + limit, f"next {limit} →"))
+    pager = (
+        f'<p class="pager">{ " · ".join(pager_parts) }'
+        f' <span class="dim">(rows {offset + 1}–{offset + len(rows)})</span></p>'
+        if pager_parts or rows
+        else ""
+    )
+
     table_rows = [
         [
             f"<a href='/runs/{esc(r['run_id'])}'>{esc(r['run_id'])}</a>",
@@ -243,11 +272,11 @@ def render_runs(store: DashboardStore, params: dict) -> str:
       <label>Agent <input name="agent" size="10"></label>
       <label>Model <input name="model" size="18"></label>
       <label>Status <input name="status" size="12"></label>
-      <label>Limit <input name="limit" size="5"></label>
+      <label>Per page <input name="limit" size="5"></label>
       <button type="submit">Filter</button>
     </form>
     """
-    body = f"<h2>Runs</h2>{filter_form}" + table(
+    body = f"<h2>Runs</h2>{filter_form}{pager}" + table(
         ["RUN ID", "BENCHMARK", "AGENT", "MODEL", "STATUS", "DURATION", "TIME (UTC)"],
         table_rows,
     )
@@ -359,8 +388,11 @@ def render_run_detail(store: DashboardStore, run_id: str) -> str | None:
         ("Capabilities", esc(", ".join((agent.get("capabilities") or [])) or "—")),
         ("Status", status_badge(overall.get("status"))),
         ("Failure reason", esc(overall.get("failure_reason"))),
+        ("Failure stage", esc(overall.get("failure_stage") or "—")),
         ("Duration", format_duration(overall.get("duration_seconds"))),
     ])}
+    <h2>Stage timings</h2>
+    {key_value_table(sorted((payload.get('stage_timings') or {}).items()))}
     <h2>Evaluations</h2>
     {eval_table(payload.get('evaluations') or [], 'Public')}
     {eval_table(payload.get('hidden_evaluations') or [], 'Hidden (executed outside the workspace)')}
@@ -561,18 +593,73 @@ def render_experiment_detail(store: DashboardStore, experiment_id: str) -> str |
     matrix = f"<table><tr>{header_row}</tr>{''.join(matrix_rows)}</table>"
 
     groups = aggregate_by_config(rows)
-    group_rows = [
-        [
+    group_rows = []
+    for g in groups:
+        interval = g.pass_rate_interval
+        bounds = (
+            f"{interval[0] * 100:.0f}–{interval[1] * 100:.0f}%"
+            if interval else "—"
+        )
+        iqr = g.duration_iqr
+        iqr_text = (
+            f"{format_duration(iqr[0])}–{format_duration(iqr[1])}"
+            if iqr else "—"
+        )
+        group_rows.append([
             esc(g.label),
             str(g.runs),
-            format_percent(g.pass_rate),
-            format_duration(g.median_duration),
+            format_percent(g.pass_rate) + f' <span class="dim">[{bounds}]</span>',
+            format_duration(g.median_duration)
+            + f' <span class="dim">[{iqr_text}]</span>',
             format_count(g.median_total_tokens),
             esc(format_count(g.avg_cost_usd, "$") if g.costs else "—"),
-        ]
-        for g in groups
-    ]
+        ])
     taxonomy = failure_counts(rows)
+
+    # Pairwise comparisons between configurations over matched cells only.
+    pair_sections = []
+    for i in range(len(groups)):
+        for j in range(i + 1, len(groups)):
+            stats = pairwise_statistics(
+                [r for r in rows if r.get("config_hash") == groups[i].config_hash],
+                [r for r in rows if r.get("config_hash") == groups[j].config_hash],
+            )
+            if not stats:
+                continue
+            p_value = stats.get("mcnemar_p")
+            p_text = f"{p_value:.3f}" if isinstance(p_value, float) else "—"
+            rows_pair = [
+                ["Matched cells", str(stats["matched"])],
+                ["A passed / B failed", str(stats["a_only"])],
+                ["B passed / A failed", str(stats["b_only"])],
+                ["Both passed", str(stats["both_pass"])],
+                ["Both failed", str(stats["both_fail"])],
+                ["McNemar exact p", p_text],
+                [
+                    "Median time among mutual passes",
+                    f"A {format_duration(stats['a_median_duration_mutual_pass'])}"
+                    f" · B {format_duration(stats['b_median_duration_mutual_pass'])}",
+                ],
+                [
+                    "Median tokens among mutual passes",
+                    f"A {format_count(stats['a_median_tokens_mutual_pass'])}"
+                    f" · B {format_count(stats['b_median_tokens_mutual_pass'])}",
+                ],
+                [
+                    "Median cost among mutual passes",
+                    f"A {esc(format_count(stats['a_median_cost_usd_mutual_pass'], '$') if stats['a_median_cost_usd_mutual_pass'] is not None else '—')}"
+                    f" · B {esc(format_count(stats['b_median_cost_usd_mutual_pass'], '$') if stats['b_median_cost_usd_mutual_pass'] is not None else '—')}",
+                ],
+            ]
+            pair_sections.append(
+                f"<h4>{esc(groups[i].label)} vs {esc(groups[j].label)}</h4>"
+                + key_value_table(rows_pair)
+            )
+    pairs_html = (
+        "".join(pair_sections)
+        if pair_sections
+        else "<p>Two configs with matched cells are needed for comparison.</p>"
+    )
 
     durations = [
         (str(r["run_id"]), r["duration_seconds"])
@@ -586,11 +673,14 @@ def render_experiment_detail(store: DashboardStore, experiment_id: str) -> str |
         ("Completed", str(len(manifest.get("completed") or []))),
         ("Interrupted", esc(manifest.get("interrupted"))),
         ("Repeat", str(manifest.get("repeat"))),
+        ("Resolved benchmarks", esc(", ".join(manifest.get("resolved_benchmarks") or []) or "—")),
     ])}
     <h3>Benchmark × config success matrix</h3>
     <table><tr>{header_row}</tr>{''.join(matrix_rows)}</table>
     <h3>Configuration aggregates</h3>
-    {table(['CONFIG', 'RUNS', 'PASS RATE', 'MEDIAN TIME', 'MEDIAN TOKENS', 'AVG COST'], group_rows)}
+    {table(['CONFIG', 'RUNS', 'PASS RATE [95% WILSON]', 'MEDIAN TIME [IQR]', 'MEDIAN TOKENS', 'AVG COST'], group_rows)}
+    <h3>Pairwise configuration comparison</h3>
+    {pairs_html}
     <h3>Failure taxonomy</h3>
     {table(['STATUS', 'COUNT'], [[esc(k), str(v)] for k, v in sorted(taxonomy.items())])}
     <h3>Duration distribution</h3>

@@ -15,6 +15,63 @@ from dataclasses import dataclass, field
 WILSON_Z_95 = 1.959963984540054
 
 
+def mcnemar_exact_p(b_only: int, a_only: int) -> float | None:
+    """Two-sided exact McNemar p-value from discordant pair counts.
+
+    ``a_only`` = pairs where A passed and B failed; ``b_only`` = the reverse.
+    Under the null hypothesis each discordant pair favors either side with
+    probability ½, so the tail probability is a two-sided binomial test.
+    Returns None when there are no discordant pairs (no evidence either way).
+    """
+    discordant = b_only + a_only
+    if discordant == 0:
+        return None
+    tail = sum(math.comb(discordant, i) for i in range(0, min(b_only, a_only) + 1))
+    return min(1.0, 2.0 * tail / (2.0 ** discordant))
+
+
+def pareto_frontier(
+    candidates: list[dict],
+    *,
+    label_key: str = "label",
+) -> list[str]:
+    """Labels on the quality/cost/speed Pareto frontier.
+
+    Each candidate dict needs numeric ``pass_rate``, ``median_duration``, and
+    ``avg_cost_usd`` (missing values rank as worst). A candidate is on the
+    frontier when no other candidate is at least as good on every dimension
+    and strictly better on one. Deliberately NOT a combined score: trade-offs
+    stay visible.
+    """
+
+    def point(c: dict) -> tuple[float, float, float]:
+        rate = c.get("pass_rate")
+        duration = c.get("median_duration")
+        cost = c.get("avg_cost_usd")
+        return (
+            float(rate) if _num(rate) else -1.0,          # higher better
+            float(duration) if _num(duration) else math.inf,   # lower better
+            float(cost) if _num(cost) else math.inf,      # lower better
+        )
+
+    points = {c[label_key]: point(c) for c in candidates if c.get(label_key)}
+    frontier: list[str] = []
+    for label, (rate, duration, cost) in points.items():
+        dominated = False
+        for other_label, (o_rate, o_duration, o_cost) in points.items():
+            if other_label == label:
+                continue
+            if (
+                o_rate >= rate and o_duration <= duration and o_cost <= cost
+                and (o_rate > rate or o_duration < duration or o_cost < cost)
+            ):
+                dominated = True
+                break
+        if not dominated:
+            frontier.append(label)
+    return sorted(frontier)
+
+
 def wilson_interval(
     successes: int, total: int, z: float = WILSON_Z_95
 ) -> tuple[float, float] | None:
@@ -88,6 +145,54 @@ def pairwise_compare(
     return counts
 
 
+def pairwise_statistics(rows_a: list[dict], rows_b: list[dict]) -> dict | None:
+    """Paired comparison between two configs over identical cells.
+
+    Extends :func:`pairwise_compare` with an exact McNemar p-value over the
+    discordant pairs and duration/token/cost summaries computed ONLY among
+    mutual passes — a failed run's missing metrics must never masquerade as a
+    fast/cheap one. Unmatched cells are excluded, never compared as pairs.
+    """
+    def key(row: dict):
+        return (row.get("benchmark"), row.get("trial"))
+
+    map_a = {key(r): r for r in rows_a}
+    map_b = {key(r): r for r in rows_b}
+    shared = sorted(set(map_a) & set(map_b))
+    if not shared:
+        return None
+
+    result = pairwise_compare(rows_a, rows_b)
+    assert result is not None  # shared is non-empty
+    result["mcnemar_p"] = mcnemar_exact_p(result["b_only"], result["a_only"])
+
+    for prefix, mapping in (("a", map_a), ("b", map_b)):
+        durations, tokens, costs = [], [], []
+        for cell in shared:
+            if map_a[cell].get("status") == "passed" and map_b[cell].get("status") == "passed":
+                row = mapping[cell]
+                if _is_number(row.get("duration_seconds")):
+                    durations.append(float(row["duration_seconds"]))
+                if _is_number(row.get("total_tokens")):
+                    tokens.append(int(row["total_tokens"]))
+                if _is_number(row.get("cost_usd")):
+                    costs.append(float(row["cost_usd"]))
+        result[f"{prefix}_median_duration_mutual_pass"] = (
+            statistics.median(durations) if durations else None
+        )
+        result[f"{prefix}_median_tokens_mutual_pass"] = (
+            int(statistics.median(tokens)) if tokens else None
+        )
+        result[f"{prefix}_median_cost_usd_mutual_pass"] = (
+            float(statistics.median(costs)) if costs else None
+        )
+    return result
+
+
+def _num(value) -> bool:
+    return _is_number(value)
+
+
 @dataclass
 class ConfigAggregate:
     """Mutable accumulator: group statistics are filled in row by row."""
@@ -105,6 +210,7 @@ class ConfigAggregate:
     statuses: list = field(default_factory=list)
     backends: set = field(default_factory=set)
     image_ids: set = field(default_factory=set)
+    violation_counts: list = field(default_factory=list)  # protected-path hits per run
 
     @property
     def pass_rate(self) -> float | None:
@@ -127,6 +233,11 @@ class ConfigAggregate:
         return quantile(self.durations, 0.75)
 
     @property
+    def duration_iqr(self) -> tuple[float, float] | None:
+        p25, p75 = self.p25_duration, self.p75_duration
+        return (p25, p75) if p25 is not None and p75 is not None else None
+
+    @property
     def median_files_changed(self) -> float | None:
         return statistics.median(self.files_changed) if self.files_changed else None
 
@@ -139,8 +250,24 @@ class ConfigAggregate:
         return statistics.median(self.total_tokens) if self.total_tokens else None
 
     @property
+    def token_iqr(self) -> tuple[float, float] | None:
+        p25, p75 = quantile(self.total_tokens, 0.25), quantile(self.total_tokens, 0.75)
+        return (p25, p75) if p25 is not None and p75 is not None else None
+
+    @property
     def avg_cost_usd(self) -> float | None:
         return statistics.fmean(self.costs) if self.costs else None
+
+    @property
+    def median_cost_usd(self) -> float | None:
+        return statistics.median(self.costs) if self.costs else None
+
+    @property
+    def protected_violation_rate(self) -> float | None:
+        if not self.violation_counts:
+            return None
+        flagged = sum(1 for n in self.violation_counts if n > 0)
+        return flagged / len(self.violation_counts)
 
     @property
     def failure_breakdown(self) -> dict[str, int]:
@@ -190,6 +317,8 @@ def aggregate_by_config(rows: list[dict]) -> list[ConfigAggregate]:
             group.total_tokens.append(int(row["total_tokens"]))
         if _is_number(row.get("cost_usd")):
             group.costs.append(float(row["cost_usd"]))
+        if _is_number(row.get("violation_count")):
+            group.violation_counts.append(int(row["violation_count"]))
     return sorted(groups.values(), key=lambda g: (-g.runs, g.label))
 
 

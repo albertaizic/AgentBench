@@ -226,7 +226,12 @@ class TestReproduceCli:
             "resolved_commit": commit, "config_hash": config_hash,
         }
         original["execution"] = dict(self.REALISTIC_PROVENANCE)
-        original["config"] = {"_benchmark_manifest": str(manifest)}
+        # Real evidence always stores the full config snapshot; reproduce
+        # recomputes identity from it rather than trusting stored digests.
+        original["config"] = {
+            **load_benchmark(manifest).config_snapshot(),
+            "_benchmark_manifest": str(manifest),
+        }
         result_dir = tmp_path / "demo" / "r-orig"
         result_dir.mkdir(parents=True)
         (result_dir / "result.json").write_text(json.dumps(original), encoding="utf-8")

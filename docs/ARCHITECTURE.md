@@ -9,39 +9,41 @@ statistics speak.
 ## Component map
 
 ```text
+```text
 ┌───────────────────────────────────────────────────────────────┐
 │ CLI (Typer)                                                   │
 │  run · experiment · history · show · compare · reproduce      │
-│  export · benchmark list/validate · dashboard · doctor        │
+│  export · benchmark list/validate/report · dashboard · doctor │
 └──────────────┬────────────────────────────────────────────────┘
                │
 ┌──────────────▼──────────────┐   ┌───────────────────────────┐
 │ Experiment planner          │   │ Benchmark discovery       │
-│ cells = bench × config × n  │──▶│ manifests by name         │
-│ manifest · resume · ids     │   └───────────────────────────┘
+│ cells = bench × config × n  │──▶│ manifests by name;        │
+│ manifest · resume · ids     │   │ suite/tag/category select │
+│ scheduler.py: --jobs N      │   └───────────────────────────┘
 └──────────────┬──────────────┘
                ▼
 ┌──────────────────────────────┐
-│ Runner (one benchmark run)   │
-│ 1 clone+checkout workspace   │
-│ 2 agent invocation           │────▶ AgentAdapter (how) ──┐
-│ 3 optional usage parsing     │                          │
-│ 4 diff vs pinned base sha    │────▶ ExecutionBackend( where )
-│ 5 change-policy evaluation   │         host │ docker    │
-│ 6 public evaluations         │              ▼           │
-│ 7 hidden evaluations (host)  │      docker run --rm …   │
-│ 8 classify outcome           │                          │
-│ 9 persist evidence           │◀─────────────────────────┘
+│ Runner (one benchmark run)   │  StageTimer → stage_timings
+│ 1 clone+checkout workspace   │  setup errors persist as
+│ 2 agent invocation           │──▶ AgentAdapter (how) ──┐
+│ 3 optional usage parsing     │    setup_failed+stage    │
+│ 4 diff vs pinned base sha    │────▶ ExecutionBackend(where)
+│ 5 change-policy evaluation   │      host │ docker      │
+│ 6 public evaluations         │           ▼            │
+│ 7 hidden evaluations (host)  │   docker run --rm --name…
+│ 8 classify outcome (+stage)  │   cleanup(): rm -f own │
+│ 9 persist evidence           │◀────────────────────────┘
 └──────┬───────────────────────┘
        ▼
 ┌──────────────────────────────┐     ┌──────────────────────────┐
-│ results/<bench>/<run-id>/    │ ──▶ │ SQLite index (derived)   │
-│   result.json (source truth) │     │ storage.py — only SQL    │
+│ results/<bench>/<run-id>/    │ ──▶ │ SQLite index (derived,   │
+│   result.json (source truth) │     │ WAL; storage.py only SQL)│
 │   diff.patch, *.log sidecars │     └────────┬─────────────────┘
 └──────────────────────────────┘              ▼
                         ┌──────────────────────────────────┐
-                        │ aggregate.py · export.py         │
-                        │ compare · experiments · dashboard│
+                        │ aggregate.py (Wilson/McNemar/    │
+                        │ Pareto) · export.py · dashboard  │
                         └──────────────────────────────────┘
 ```
 
@@ -49,12 +51,16 @@ statistics speak.
 
 | Concern | Owner | Notes |
 | --- | --- | --- |
-| Benchmark schema & identity | `models.py` | config hash excludes `results_dir` and `execution` |
+| Benchmark schema & identity | `models.py` | config hash excludes `results_dir` and `execution`; experiment benchmark selectors resolve to a persisted list |
 | YAML loading | `loader.py` | strict; relative repository paths resolve against the manifest |
-| Agent "how" | `adapters/*` | argv construction, prompt delivery, output parsing, capabilities |
-| Execution "where" | `backends/*` | placeholders, credential forwarding, limits, provenance |
-| Workspace lifecycle | `workspace.py` | fresh clone per run; exact-commit verification; optional mirror cache |
-| Process mechanics | `process.py` | capture, timeout, tree-kill, env hardening |
+| Agent "how" | `adapters/*` | argv construction, prompt delivery, output parsing, capabilities — nothing about where execution happens |
+| Execution "where" | `backends/*` | placeholders, credential forwarding, limits, env policy, provenance — nothing agent-specific |
+| Parallel scheduling | `scheduler.py` | ≤N outstanding cells, main-thread-only reporting/callbacks, cooperative stop, KI surfaced through futures |
+| Setup-failure evidence | `runner.py` + `stages.py` | `setup_failed` runs with structured `failure_stage`; docker infra failures detected by CLI exit-code/markers |
+| Stage timings | `stages.py` + `runner.py` | wall-clock per pipeline phase persisted as `stage_timings` |
+| Baselines | `baselines.py` | reference-patch application + evaluation; agent type `reference-baseline`, maintenance-only |
+| Workspace lifecycle | `workspace.py` | fresh clone per run; exact-commit verification; sha256-URL-keyed mirror cache with hit/miss provenance |
+| Process mechanics | `process.py` | capture, timeout, tree-kill, cwd-hijack opt-out, optional explicit child env |
 | Diff evidence | `diffs.py` | pinned base, tamper guards, numstat + name-status |
 | Change policies | `protected.py` | warn/fail/allowed globs over POSIX paths |
 | Evaluation | `evaluation.py` | exit codes decide; hidden evals always host-side |

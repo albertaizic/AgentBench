@@ -56,7 +56,13 @@ def preflight(original: dict, *, results_root: Path) -> ProvenanceComparison:
         return comparison
 
     current_hash = spec.config_hash()
-    stored_hash = benchmark.get("config_hash")
+    # Recompute the identity of the STORED snapshot under current rules:
+    # trusting the recorded digest would block reproduction whenever the
+    # hash inputs evolve (e.g. metadata leaving identity), even when the
+    # evaluation-relevant configuration is byte-identical.
+    from agentbench.models import benchmark_hash_from_snapshot
+
+    stored_hash = benchmark_hash_from_snapshot(config)
     comparison.add("benchmark identity (config hash)", current_hash == stored_hash,
                    current_hash)
     if current_hash != stored_hash:
@@ -119,7 +125,13 @@ def condition_checks(original: dict, rerun: dict) -> list[tuple[str, bool, str]]
         new = (rerun.get(section) or {}).get(key)
         checks.append((name, old == new and old is not None, f"{old} vs {new}"))
 
-    pair("same benchmark identity", "benchmark", "config_hash")
+    # Identity is compared by RECOMPUTING both snapshots under current rules,
+    # so evidence recorded before an identity-rule change still compares fairly.
+    from agentbench.models import benchmark_hash_from_snapshot
+
+    old_id = benchmark_hash_from_snapshot(original.get("config") or {})
+    new_id = benchmark_hash_from_snapshot(rerun.get("config") or {})
+    checks.append(("same benchmark identity", old_id == new_id, f"{old_id} vs {new_id}"))
     pair("same resolved commit", "benchmark", "resolved_commit")
     pair("same agent config", "config", "agent")
     old_backend = (original.get("execution") or {}).get("backend")

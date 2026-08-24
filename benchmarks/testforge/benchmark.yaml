@@ -1,0 +1,45 @@
+name: testforge
+repository: fixture
+commit: fa6d5b5f8971af2b2211809e80ccb3d10a871b09
+description: |
+  Implementation exists and is correct; the TEST SUITE is missing. The agent
+  must write tests that pass on the real code AND catch five seeded mutants;
+  changing the implementation is a protected-path violation.
+prompt: |
+  This repository ships `textforge/slug.py` — a slugifier whose behavior is
+  fully specified by its docstring — and NO tests for it.
+
+  Your task: create `tests/test_slug.py` containing thorough tests for the
+  documented behavior, including the edge cases (separators, max_length
+  truncation, invalid separator, unicode digits, repeated separators).
+
+  Grading is mutation-based: your suite must (a) PASS against the real
+  implementation and (b) FAIL against each of five seeded buggy variants
+  (lowercasing dropped, separator runs not collapsed, trailing separator
+  not trimmed, max_length boundary mishandled, separator validation
+  skipped). If a mutant survives, you asserted too little.
+
+  Do NOT modify anything under textforge/ - that directory is protected and
+  changing it fails the benchmark regardless of test quality.
+agent:
+  type: claude-code
+evaluations:
+  - name: mutation-checker
+    command: '"{python}" check_tests.py'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: implementation-untouched
+      command: '"{python}" -m pytest -q'
+change_policies:
+  - patterns: ["textforge/**"]
+    policy: fail
+    description: the implementation is correct; only tests may be added
+category: test-writing
+tags: [testing, mutation]
+suites: [python-core]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+timeout_seconds: 900
+results_dir: results

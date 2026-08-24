@@ -1,0 +1,15 @@
+name: v04-claude-parallel
+# Controlled real-agent parallel validation: two independent benchmarks run
+# concurrently under --jobs 2 (single trial each to stay gentle on rate
+# limits; the deterministic parallel matrix is exercised separately).
+benchmarks:
+  suite: smoke        # ledgerpad + jobqueue via declarative selector
+configs:
+  - name: claude-sonnet
+    agent:
+      type: claude-code
+      model: sonnet
+repeat: 1
+execution:
+  backend: host
+results_dir: results

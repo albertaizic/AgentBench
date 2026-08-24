@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev]
+      # Credential-free by construction: live_agent tests never run in CI,
+      # and the default suite is fully hermetic. Docker-marked tests are
+      # excluded even though a daemon exists on ubuntu runners, because the
+      # docker integration path is validated on real workloads locally.
+      - name: Run deterministic test suite
+        run: pytest -m "not live_agent and not docker"
+
+  smoke:
+    name: CLI smoke (fresh install)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install into clean environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+      - name: Exercise entry points without credentials
+        run: |
+          agentbench --help
+          agentbench doctor --results-dir /tmp/ab-smoke-results || true
+          agentbench benchmark list

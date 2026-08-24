@@ -1,0 +1,18 @@
+diff --git a/retryloop/core.py b/retryloop/core.py
+index 5f0ac0c..813ed40 100644
+--- a/retryloop/core.py
++++ b/retryloop/core.py
+@@ -16,10 +16,9 @@ def run_with_retry(operation, attempts: int = 3, on_retry=None):
+     for attempt in range(attempts):
+         try:
+             return operation()
+-        except Exception as exc:
+-            # BUG: retries FatalError too.
++        except RetryableError as exc:
+             last_error = exc
+             if attempt < attempts - 1 and on_retry is not None:
+                 on_retry(exc, attempt)
+-    # BUG: swallows the final error - callers get None.
+-    return None
++    # Exhausted: surface the real error instead of returning None.
++    raise last_error

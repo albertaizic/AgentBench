@@ -34,6 +34,7 @@ protected_paths:
 fail_on_protected_path_violation: true
 category: bugfix
 tags: [validation, boundary]
+suites: [smoke, python-core, bugfix]
 language: python
 difficulty: easy
 expect_broken_baseline: true

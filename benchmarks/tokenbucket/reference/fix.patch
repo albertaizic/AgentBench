@@ -1,0 +1,26 @@
+diff --git a/tokenbucket/limiter.py b/tokenbucket/limiter.py
+index a0c8dcd..85ffb79 100644
+--- a/tokenbucket/limiter.py
++++ b/tokenbucket/limiter.py
+@@ -16,17 +16,15 @@ class TokenBucket:
+ 
+     def _refill(self) -> None:
+         now = self._clock()
+-        elapsed = now - self._last
+-        # BUG: whole seconds only - fractional credit is lost.
+-        gained = self.refill_rate * float(int(elapsed))
++        elapsed = max(0.0, now - self._last)
++        gained = self.refill_rate * elapsed   # fractional credit kept
+         self._tokens = min(self.capacity, self._tokens + gained)
+         self._last = now
+ 
+     def try_take(self, amount: float) -> bool:
+         self._refill()
+-        # BUG: no clamp - balance may go negative and the debt is
+-        # repaid by future refills instead of blocking the caller.
+-        if amount <= self._tokens + self.refill_rate:
++        amount = max(0.0, float(amount))
++        if amount <= self._tokens:            # clamp: never go negative
+             self._tokens -= amount
+             return True
+         return False

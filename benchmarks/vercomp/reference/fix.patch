@@ -1,0 +1,53 @@
+diff --git a/vercomp/versions.py b/vercomp/versions.py
+index 7036c2e..dcc0e9b 100644
+--- a/vercomp/versions.py
++++ b/vercomp/versions.py
+@@ -2,16 +2,42 @@
+ 
+ from __future__ import annotations
+ 
++import re
++
++_VERSION = re.compile(
++    r"^(?P<core>[0-9]+(?:\.[0-9]+)*)(?:-(?P<pre>.+))?$"
++)
++
+ 
+ def compare(a: str, b: str) -> int:
+-    # BUG: lexicographic component comparison.
+-    if a == b:
+-        return 0
+-    return -1 if a < b else 1
++    ka, kb = _sort_key(a), _sort_key(b)
++    return -1 if ka < kb else (1 if ka > kb else 0)
+ 
+ def sort_versions(versions: list[str]) -> list[str]:
+     return sorted(versions, key=_sort_key)
+ 
++def _parse(version: str):
++    match = _VERSION.match(version.strip())
++    if match is None:
++        raise ValueError(f"unparseable version: {version!r}")
++    core = tuple(int(part) for part in match.group("core").split("."))
++    pre = match.group("pre")
++    identifiers = tuple(pre.split(".")) if pre else ()
++    return core, identifiers
++
++def _padded(core):
++    return tuple(list(core) + [0] * (3 - len(core))) if len(core) < 3 else core
++
++def _identifier_key(identifier: str):
++    if identifier.isdigit():
++        return (0, int(identifier), "")   # numeric sorts first
++    return (1, 0, identifier)
++
+ def _sort_key(version: str):
+-    # BUG: pre-release suffix is never separated out.
+-    return tuple(version.split("."))
++    core, identifiers = _parse(version)
++    core = _padded(core)                    # 1.5 == 1.5.0
++    pre_key = (
++        (0, tuple(_identifier_key(i) for i in identifiers))
++        if identifiers else (1, ())         # any prerelease < release
++    )
++    return (core, pre_key)

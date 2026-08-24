@@ -34,6 +34,7 @@ protected_paths:
 fail_on_protected_path_violation: true
 category: bugfix
 tags: [serialization, versioning]
+suites: [python-core]
 language: python
 difficulty: medium
 expect_broken_baseline: true

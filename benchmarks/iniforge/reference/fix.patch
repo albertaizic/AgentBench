@@ -1,0 +1,45 @@
+diff --git a/iniforge/loader.py b/iniforge/loader.py
+index 59198e7..a513c51 100644
+--- a/iniforge/loader.py
++++ b/iniforge/loader.py
+@@ -2,8 +2,11 @@
+ 
+ from __future__ import annotations
+ 
++import re
++
+ FALSE_WORDS = {"false", "no", "off", "0"}
+ TRUE_WORDS = {"true", "yes", "on", "1"}
++_INT = re.compile(r"[+-]?[0-9]+\Z")
+ 
+ 
+ class Settings:
+@@ -24,19 +27,21 @@ class Settings:
+             key = key.strip()
+             value = value.strip()
+             bucket = self._sections.setdefault(section, {})
+-            # BUG: first value wins; duplicates are ignored.
+-            if key not in bucket:
+-                bucket[key] = self._coerce(key, value)
++            # Last duplicate wins.
++            bucket[key] = self._coerce(key, value)
+ 
+     @staticmethod
+     def _coerce(key: str, value: str) -> object:
+-        # BUG: loose truthiness - any non-false word becomes True,
+-        # so strings like "maybe" silently parse as boolean True and
+-        # real integers collapse to booleans too.
+         lowered = value.lower()
++        if lowered in TRUE_WORDS:
++            return True
+         if lowered in FALSE_WORDS:
+             return False
+-        return True
++        if _INT.fullmatch(value):
++            return int(value)
++        if value:
++            return value  # any other non-empty value is a string
++        raise ValueError(f"empty value for {key!r}")
+ 
+     def get(self, section: str, key: str, default: object = None) -> object:
+         return self._sections.get(section, {}).get(key, default)

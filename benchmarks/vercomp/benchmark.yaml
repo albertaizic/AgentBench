@@ -1,0 +1,44 @@
+name: vercomp
+repository: fixture
+commit: 15deede40972fc88bf0e368722ad6113aedeb53b
+description: |
+  Version comparison is lexicographic ("1.10" sorts before "1.9") and
+  pre-release handling breaks backward compatibility with old tags.
+prompt: |
+  Our release tooling compares version strings and gets ordering wrong:
+
+  1. Components are compared as STRINGS, so "1.10.0" < "1.9.0". Numeric
+     components must compare numerically.
+  2. Pre-release suffixes (e.g. "1.2.0-rc.1", "1.2.0-alpha.2") are ignored
+     by the parser, so a pre-release compares EQUAL to its final release.
+     Correct SemVer-ish rule: a version WITH a pre-release tag sorts BEFORE
+     the same version without one; two pre-releases for the same core
+     version order by their identifiers (numeric identifiers compare
+     numerically, alphanumeric lexically, numeric < alphanumeric).
+
+  Keep the public API (compare(a, b) -> -1/0/1, sort_versions(list)) intact;
+  older callers pass plain "x.y" two-part versions and must keep working.
+  The failing public tests pin the contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: ordering-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [compatibility, parsing]
+suites: [python-core, bugfix]
+language: python
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

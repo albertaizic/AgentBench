@@ -43,6 +43,10 @@ class ExperimentManifest(BaseModel):
     benchmark_identities: dict[str, str]  # name -> config hash of the loaded spec
     config_identities: dict[str, str]  # config name -> hash
     execution_backend: str | None = None
+    # Concrete benchmark names resolved at creation time. Metadata selectors
+    # (suite/tags/category) are resolved once; later corpus changes never
+    # silently alter an existing experiment.
+    resolved_benchmarks: list[str] = Field(default_factory=list)
     completed: list[dict] = Field(default_factory=list)
     interrupted: bool = False
 
@@ -74,14 +78,22 @@ def plan_cells(
     spec: ExperimentSpec,
     manifests: dict[str, Path],
     benchmark_hashes: dict[str, str],
+    benchmarks: list[str] | None = None,
 ) -> list[CellPlan]:
-    """Build the full cell plan; every benchmark name must resolve."""
-    missing = [name for name in spec.benchmarks if name not in manifests]
+    """Build the full cell plan; every benchmark name must resolve.
+
+    ``benchmarks`` overrides the spec's own selection (used once a metadata
+    selector has been resolved to concrete names).
+    """
+    names = benchmarks if benchmarks is not None else (
+        spec.benchmarks if isinstance(spec.benchmarks, list) else []
+    )
+    missing = [name for name in names if name not in manifests]
     if missing:
         raise ExperimentError(f"unknown benchmark(s): {', '.join(sorted(missing))}")
 
     plans: list[CellPlan] = []
-    for benchmark_name in spec.benchmarks:
+    for benchmark_name in names:
         for config in spec.configs:
             for trial in range(1, spec.repeat + 1):
                 key = cell_key(
@@ -135,17 +147,26 @@ def save_manifest(manifest: ExperimentManifest, directory: Path) -> Path:
     return target
 
 
-def new_manifest(spec: ExperimentSpec, experiment_id: str, results_dir: Path) -> ExperimentManifest:
+def new_manifest(
+    spec: ExperimentSpec,
+    experiment_id: str,
+    results_dir: Path,
+    resolved_benchmarks: list[str] | None = None,
+) -> ExperimentManifest:
+    benchmarks = resolved_benchmarks if resolved_benchmarks is not None else (
+        spec.benchmarks if isinstance(spec.benchmarks, list) else []
+    )
     return ExperimentManifest(
         experiment_id=experiment_id,
         name=spec.name,
         created_at=datetime.now(timezone.utc).isoformat(),
         results_dir=str(results_dir),
-        planned_cells=spec.cell_count,
+        planned_cells=len(benchmarks) * len(spec.configs) * spec.repeat,
         repeat=spec.repeat,
         benchmark_identities={},
         config_identities={c.name: c.config_hash() for c in spec.configs},
         execution_backend=(spec.execution.backend if spec.execution else None),
+        resolved_benchmarks=list(benchmarks),
     )
 
 

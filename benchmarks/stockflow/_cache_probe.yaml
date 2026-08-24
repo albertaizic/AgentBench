@@ -1,0 +1,25 @@
+name: stockflow
+# TEMPORARY validation artifact: identical to benchmark.yaml but pointed at a
+# local bare "remote" over file:// so the source-cache path (hit/miss,
+# preparation duration) can be measured without model cost. The agent is a
+# deterministic no-op; outcomes are irrelevant, provenance is the point.
+repository: file:///C:/Users/IDTOTAL%20ACTIVE/AppData/Local/Temp/ab-remote/stockflow.git
+commit: 020f9f1e26174ae5ffab054899439a3f48280384
+prompt: |
+  No-op probe: nothing to change.
+agent:
+  type: command
+  argv: ["{python}", "-c", "import sys; sys.stdin.read(); print('noop')"]
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: behavioral-checks
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+timeout_seconds: 600
+results_dir: results

@@ -1,0 +1,65 @@
+diff --git a/gate/cli.py b/gate/cli.py
+index bf8a70e..a07e891 100644
+--- a/gate/cli.py
++++ b/gate/cli.py
+@@ -14,7 +14,6 @@ def main(argv=None):
+     parser.add_argument("--payload")
+     parser.add_argument("--strict", action="store_true")
+     args = parser.parse_args(argv)
+-    # BUG: --strict parsed but never forwarded.
+     if args.file:
+-        return load_config(args.file)
+-    return fetch_and_load(args.payload or "{}")
++        return load_config(args.file, strict=args.strict)
++    return fetch_and_load(args.payload or "{}", strict=args.strict)
+diff --git a/gate/policy.py b/gate/policy.py
+index 94ae29a..0989baa 100644
+--- a/gate/policy.py
++++ b/gate/policy.py
+@@ -6,6 +6,7 @@ from gate.config import GateConfig
+ 
+ 
+ _cache: dict[str, GateConfig] = {}
++_ALLOWED = {"endpoint", "retries", "strict"}
+ 
+ 
+ def cache_config(name: str, config: GateConfig) -> None:
+@@ -13,7 +14,9 @@ def cache_config(name: str, config: GateConfig) -> None:
+ 
+ 
+ def evaluate(name: str, payload_keys: list[str]) -> list[str]:
+-    # BUG: cached strictness is never consulted.
+     config = _cache[name]
+-    allowed = {"endpoint", "retries", "strict"}
+-    return [k for k in payload_keys if k in allowed]
++    if config.strict:
++        unknown = [k for k in payload_keys if k not in _ALLOWED]
++        if unknown:
++            raise KeyError(f"unknown config key: {sorted(unknown)[0]}")
++    return [k for k in payload_keys if k in _ALLOWED]
+diff --git a/gate/remote.py b/gate/remote.py
+index 5ed2f50..950ff9e 100644
+--- a/gate/remote.py
++++ b/gate/remote.py
+@@ -7,14 +7,17 @@ import json
+ from gate.config import GateConfig
+ 
+ 
++_KNOWN = {"endpoint", "retries", "strict"}
++
++
+ def fetch_and_load(payload: str, strict: bool = False) -> GateConfig:
+-    # BUG: strict is accepted then ignored.
+     data = json.loads(payload)
+-    known = {"endpoint", "retries", "strict"}
+-    unknown = {k: v for k, v in data.items() if k not in known}
++    unknown = {k: v for k, v in data.items() if k not in _KNOWN}
++    if strict and unknown:
++        raise KeyError(f"unknown config key: {sorted(unknown)[0]}")
+     return GateConfig(
+         endpoint=data.get("endpoint", "https://example.invalid"),
+         retries=data.get("retries", 2),
+-        strict=False,
++        strict=strict,
+         extra=unknown,
+     )

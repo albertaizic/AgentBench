@@ -1,0 +1,49 @@
+name: bankday
+repository: fixture
+commit: 71b59593e609ca21dff362a97856d5dc8de78f7b
+description: |
+  Ledger transfers debit the source before validating funds and never roll
+  back multi-step batches, so failed transfers leave accounts corrupted.
+prompt: |
+  Our in-memory double-entry ledger violates its own core invariant — every
+  committed operation leaves total balances unchanged and no account ever
+  goes below zero.
+
+  Defects in `Ledger`:
+
+  1. `transfer()` DEBITS the source account BEFORE checking the target's
+     validity and the source's funds. When the check fails afterwards, the
+     debit is never undone: money vanishes.
+  2. `execute_batch()` applies operations one at a time with no rollback.
+     If any operation fails validation mid-batch, earlier operations stay
+     applied. A batch must be ATOMIC: either every operation commits, or
+     none do (and the specific ValidationError from the failing step
+     propagates).
+  3. `history()` must only contain operations from COMMITTED batches/
+     transfers - a rolled-back batch must leave no trace.
+
+  Keep all public signatures unchanged. The failing public tests pin the
+  contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: atomicity-invariant
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [transactions, invariant]
+suites: [python-core, bugfix]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

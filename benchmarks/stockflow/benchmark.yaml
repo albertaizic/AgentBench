@@ -49,6 +49,7 @@ description: |
   reservations (oversell), and missing quantity validation.
 category: bugfix
 tags: [state, cache, validation]
+suites: [python-core, bugfix]
 language: python
 difficulty: medium
 expect_broken_baseline: true

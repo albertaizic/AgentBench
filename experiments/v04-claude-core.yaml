@@ -1,0 +1,17 @@
+name: v04-claude-core
+# Real Claude Code sequential validation: 5 benchmarks x 1 config x 3 trials.
+benchmarks:
+  - jobqueue        # easy bugfix
+  - ledgerpad       # easy bugfix
+  - iniforge        # easy config parsing
+  - prefsfile       # medium serialization/versioning
+  - retryloop       # medium error handling
+configs:
+  - name: claude-sonnet
+    agent:
+      type: claude-code
+      model: sonnet
+repeat: 3
+execution:
+  backend: host
+results_dir: results

@@ -1,0 +1,70 @@
+diff --git a/htmlstrip/core.py b/htmlstrip/core.py
+index 98dd06c..2d1de61 100644
+--- a/htmlstrip/core.py
++++ b/htmlstrip/core.py
+@@ -3,19 +3,53 @@
+ from __future__ import annotations
+ 
+ import html as _html
+-import re
+ 
+-_TAG = re.compile(r"<[^>]*>")
+-_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+-_BLOCKS = ("p", "div", "br", "li", "/p", "/div", "/li")
++_BLOCK_NAMES = {"p", "div", "li", "br"}
++_VOID_BLOCKS = {"br"}
++_RAW_TEXT = {"script", "style"}
+ 
+ 
+ def to_text(markup: str) -> str:
+-    # BUG 1/2: comment and tag regexes stop at the first ">" so a
+-    # script body like "if (a > b)" leaks into the output.
+-    markup = _COMMENT.sub(" ", markup)
+-    markup = _TAG.sub(" ", markup)
+-    # BUG 3: unescape applied twice - "&amp;lt;" collapses to "<".
+-    text = _html.unescape(_html.unescape(markup))
+-    # BUG 4: no block-level whitespace handling beyond tag spaces.
+-    return re.sub(r"\s+", " ", text).strip()
++    out: list[str] = []
++    index = 0
++    length = len(markup)
++    while index < length:
++        char = markup[index]
++        if markup.startswith("<!--", index):
++            end = markup.find("-->", index + 4)
++            index = length if end == -1 else end + 3
++            out.append(" ")
++            continue
++        if char == "<":
++            closing = markup.find(">", index + 1)
++            if closing == -1:
++                out.append(char)
++                index += 1
++                continue
++            tag_body = markup[index + 1:closing].strip()
++            name = tag_body.split()[0].lower() if tag_body else ""
++            if name.startswith("/"):
++                name = name[1:]
++            if name in _RAW_TEXT:
++                close_token = f"</{name}>"
++                stop = markup.lower().find(close_token, closing + 1)
++                index = length if stop == -1 else stop + len(close_token)
++                out.append(" ")
++                continue
++            if name in _BLOCK_NAMES:
++                out.append(" ")
++            index = closing + 1
++            continue
++        if char == "&":
++            semicolon = markup.find(";", index + 1)
++            candidate = markup[index:semicolon + 1] if semicolon != -1 else ""
++            if candidate.startswith("&") and len(candidate) > 2:
++                decoded = _html.unescape(candidate)
++                out.append(decoded)
++                index += len(candidate)
++                continue
++        out.append(char)
++        index += 1
++    # Entities were decoded exactly once during the scan.
++    text = "".join(out)
++    return " ".join(text.split())

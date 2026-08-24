@@ -1,0 +1,49 @@
+name: typegate
+repository: fixture
+commit: 7c6c6c2077a6d033daaa7b58d1a14092be7f1524
+description: |
+  A new strict-mode flag on the config dataclass was added at one call site
+  only; every other consumer still ignores it, so strict parsing silently
+  behaves like lenient elsewhere.
+prompt: |
+  The `GateConfig` dataclass grew a `strict: bool = False` field. When
+  strict is True, unknown keys must REJECT loading with a KeyError naming
+  the first unknown key; when False, unknown keys are ignored (today's
+  behavior everywhere).
+
+  Currently only `gate/loader.py::load_config` honors `strict`. Propagate
+  the flag through every consumer so strictness works end to end:
+
+  - `gate/remote.py::fetch_and_load` must pass its own strict argument
+    through to load_config;
+  - `gate/cli.py::main` must honor `--strict` (already parsed into args)
+    for BOTH the local-file and remote paths;
+  - `gate/policy.py::evaluate` reads configs second-hand via a cache and
+    must respect whatever strictness the cached config was loaded with.
+
+  Do not change public function signatures beyond adding the already-declared
+  keyword arguments that exist in stub form. The failing public tests pin
+  each path.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: propagation-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: api-change
+tags: [propagation, types]
+suites: [python-core]
+language: python
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

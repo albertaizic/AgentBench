@@ -1,0 +1,45 @@
+diff --git a/csvroll/records.py b/csvroll/records.py
+index 438cfae..8e75217 100644
+--- a/csvroll/records.py
++++ b/csvroll/records.py
+@@ -2,6 +2,7 @@
+ 
+ from __future__ import annotations
+ 
++import csv
+ import io
+ 
+ HEADER = ["id", "label", "amount"]
+@@ -15,20 +16,20 @@ class RecordSet:
+         self.rows.append((record_id, label, amount))
+ 
+     def to_csv(self) -> str:
+-        # BUG: no quoting - commas/quotes in fields corrupt the file.
+-        lines = [",".join(HEADER)]
+-        lines.extend(",".join(row) for row in self.rows)
+-        return "\n".join(lines) + "\n"
++        buffer = io.StringIO(newline='')
++        writer = csv.writer(buffer, lineterminator='\n')
++        writer.writerow(HEADER)
++        writer.writerows(self.rows)
++        return buffer.getvalue()
+ 
+     @classmethod
+     def from_csv(cls, text: str) -> "RecordSet":
+-        # BUG: naive split cannot parse quoted fields, and v1 files
+-        # (no header row) are misread as data starting at the header.
+-        lines = [line for line in text.splitlines() if line]
+-        rows = []
+-        for line in lines[1:]:
+-            parts = line.split(",")
+-            rows.append((parts[0], parts[1], parts[2]))
++        reader = csv.reader(io.StringIO(text, newline=''))
++        parsed = [tuple(row) for row in reader if row]
++        if parsed and list(parsed[0]) == HEADER:
++            parsed = parsed[1:]  # v2: exact header match
+         record_set = cls()
+-        record_set.rows = rows
++        record_set.rows = [
++            (row[0], row[1], row[2]) for row in parsed
++        ]
+         return record_set

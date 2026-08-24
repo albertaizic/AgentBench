@@ -116,10 +116,20 @@ def remove_tree(path: Path) -> None:
 class Workspace:
     """A checked-out working copy that cleans up after itself."""
 
-    def __init__(self, path: Path, head_commit: str, *, keep: bool = False) -> None:
+    def __init__(
+        self,
+        path: Path,
+        head_commit: str,
+        *,
+        keep: bool = False,
+        prep_info: dict | None = None,
+    ) -> None:
         self.path = path
         self.head_commit = head_commit
         self._keep = keep
+        # Provenance about how this workspace was produced (cache hit/miss,
+        # preparation seconds). Recorded with run evidence; never identity.
+        self.prep_info = prep_info
 
     def cleanup(self) -> None:
         """Remove the workspace unless ``keep=True`` was requested."""
@@ -181,6 +191,7 @@ def create_workspace(
         use_cache = os.environ.get("AGENTBENCH_NO_CACHE", "") != "1"
     is_remote = "://" in repository or repository.startswith("git@")
 
+    prep_started = time.monotonic()
     cache_error: str | None = None
     cache_success = False
     if use_cache and is_remote:
@@ -246,7 +257,16 @@ def create_workspace(
     resolved = head.stdout.strip()
     if resolved != _resolve_commit(commit, path):
         raise WorkspaceError(f"checkout produced {resolved}, expected {commit}")
-    return Workspace(path, resolved, keep=keep)
+    return Workspace(
+        path,
+        resolved,
+        keep=keep,
+        prep_info={
+            "cache_hit": cache_success,
+            "cache_enabled": bool(use_cache and is_remote),
+            "duration_seconds": round(time.monotonic() - prep_started, 3),
+        },
+    )
 
 
 def _resolve_commit(abbrev: str, repo: Path) -> str:

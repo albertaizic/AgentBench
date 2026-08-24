@@ -116,7 +116,8 @@ class TestRunCommand:
 
     def test_missing_agent_binary_exits_two_not_one(self, bench_repo, tmp_path, monkeypatch):
         # An unresolvable agent binary is a setup error (exit 2), never a
-        # benchmark FAIL (exit 1) — CI keys on these codes.
+        # benchmark FAIL (exit 1) — CI keys on these codes. v0.4: it is also
+        # persisted as structured evidence instead of only a message.
         from agentbench.adapters.base import AgentAdapter, AgentInvocation
 
         class StubMissingBinary(AgentAdapter):
@@ -128,11 +129,18 @@ class TestRunCommand:
         monkeypatch.setattr("agentbench.cli.get_adapter", lambda _type: StubMissingBinary())
         repo, sha = bench_repo
         yaml_path = write_benchmark_yaml(tmp_path, repo, sha)
+        results_dir = tmp_path / "out"
 
-        result = runner.invoke(app, ["run", str(yaml_path), "--results-dir", str(tmp_path / "out")])
+        result = runner.invoke(app, ["run", str(yaml_path), "--results-dir", str(results_dir)])
 
         assert result.exit_code == 2, result.output
-        assert "Run failed" in result.output
+        assert "SETUP_FAILED" in result.output
+        # The failure became first-class run evidence.
+        payloads = list(results_dir.glob("*/*/result.json"))
+        assert len(payloads) == 1
+        evidence = json.loads(payloads[0].read_text(encoding="utf-8"))
+        assert evidence["overall"]["status"] == "setup_failed"
+        assert evidence["overall"]["failure_stage"] == "backend_prepare"
 
     def test_invalid_benchmark_content_exits_two(self, tmp_path):
         path = tmp_path / "benchmark.yaml"

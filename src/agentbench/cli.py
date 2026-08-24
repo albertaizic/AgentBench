@@ -30,7 +30,7 @@ from agentbench.aggregate import (
 )
 from agentbench.adapters import UnknownAgentError, get_adapter
 from agentbench.dashboard import make_dashboard
-from agentbench.discovery import discover, find_manifest
+from agentbench.discovery import discover, find_manifest, select_benchmarks
 from agentbench.experiments import (
     ExperimentError,
     experiment_id_for,
@@ -43,6 +43,7 @@ from agentbench.loader import LoaderError, load_benchmark, resolve_repository_pa
 from agentbench.models import BenchmarkSpec, ExecutionSpec
 from agentbench.results import RunResult
 from agentbench.runner import RunOutcome, run_benchmark
+from agentbench.scheduler import CANCELLED, MAX_JOBS, Scheduler
 from agentbench.storage import ResultIndex, default_db_path
 from agentbench.taxonomy import AGENT_TIMEOUT
 from agentbench.workspace import WorkspaceError
@@ -146,7 +147,10 @@ def _print_single_run_summary(spec: BenchmarkSpec, result: RunResult, run_dir: P
         console.print("[bold green]Overall: PASSED[/]")
     else:
         reason = overall.get("failure_reason")
+        stage = overall.get("failure_stage")
         suffix = f" — {reason}" if reason else ""
+        if stage:
+            suffix += f" [dim](stage: {stage})[/]"
         console.print(f"[bold red]Overall: {status.upper()}{suffix}[/]")
     protected = result.protected_paths
     if protected and protected.get("violations"):
@@ -224,6 +228,44 @@ def status_markup(status: str | None) -> str:
     return f"[red]{(status or '?').upper()}[/]"
 
 
+def _print_baseline_summary(result: RunResult, run_dir: Path) -> None:
+    """Summary for reference-baseline runs (never styled as an AI agent)."""
+    overall = result.overall
+    console.print()
+    console.print(
+        f"[bold]Reference-patch baseline[/] (maintenance check, not an agent)"
+        f" — Benchmark: [bold]{result.benchmark['name']}[/]   Run: {result.run_id}"
+    )
+    console.print(
+        f"Resolved commit: {str(result.benchmark.get('resolved_commit'))[:12]}"
+        f"   Patch applied via git apply"
+    )
+    table = Table(title="Evaluations")
+    for column in ("Kind", "Evaluation", "Exit", "Duration", "Result"):
+        table.add_column(column)
+    for kind, evaluations in (
+        ("public", result.evaluations),
+        ("hidden", result.hidden_evaluations),
+    ):
+        for evaluation in evaluations:
+            passed: bool = evaluation["passed"]
+            table.add_row(
+                kind,
+                evaluation["name"],
+                str(evaluation["exit_code"]),
+                format_duration(evaluation["duration_seconds"]),
+                "[green]PASS[/]" if passed else "[red]FAIL[/]",
+            )
+    console.print(table)
+    status = overall["status"]
+    if status == "passed":
+        console.print("[bold green]Overall: PASSED — benchmark is solvable.[/]")
+    else:
+        reason = overall.get("failure_reason") or ""
+        console.print(f"[bold red]Overall: {status.upper()} — {reason}[/]")
+    console.print(f"Results saved to: [underline]{run_dir}[/]")
+
+
 @app.callback()
 def _root() -> None:
     """AgentBench: reproducible evaluation framework for coding agents."""
@@ -237,9 +279,38 @@ def run(
     keep_workspace: bool = typer.Option(False, "--keep-workspace", help="Keep the temporary workspace for debugging."),
     timeout_seconds: float | None = typer.Option(None, "--timeout-seconds", min=0.1, help="Override the per-step timeout."),
     backend: str | None = typer.Option(None, "--backend", help="Execution backend override: host or docker."),
+    baseline: str | None = typer.Option(None, "--baseline", help="Deterministic baseline instead of an agent: 'reference' applies the benchmark's reference patch (maintenance-only)."),
 ) -> None:
     """Parse BENCHMARK, run the configured agent, evaluate, persist, report."""
     spec = _load_spec_or_exit(benchmark)
+
+    if baseline is not None:
+        if baseline != "reference":
+            console.print(f"[red]Unknown baseline:[/] {baseline} (supported: reference)")
+            raise typer.Exit(code=EXIT_ERROR)
+        from agentbench.baselines import BaselineError, run_reference_baseline
+
+        repository_ref = resolve_repository_path(spec.repository, base_dir=benchmark.parent)
+        root = _results_root(spec, results_dir)
+        try:
+            result, run_dir = run_reference_baseline(
+                spec,
+                repository=repository_ref,
+                benchmark_dir=benchmark.parent.resolve(),
+                manifest_path=benchmark.resolve(),
+                results_root=root,
+                timeout_seconds=timeout_seconds,
+            )
+        except BaselineError as exc:
+            console.print(f"[red]Reference baseline failed:[/] {exc}")
+            raise typer.Exit(code=EXIT_ERROR) from exc
+        except WorkspaceError as exc:
+            console.print(f"[red]Reference baseline failed:[/] {exc}")
+            raise typer.Exit(code=EXIT_ERROR) from exc
+        _index_outcome(root, RunOutcome(result=result, run_dir=run_dir, workspace_path=None))
+        _print_baseline_summary(result, run_dir)
+        status = result.overall["status"]
+        raise typer.Exit(code=EXIT_PASS if status == "passed" else EXIT_FAIL)
     repository = resolve_repository_path(spec.repository, base_dir=benchmark.parent)
     execution = ExecutionSpec(backend=backend) if backend else None
 
@@ -252,6 +323,7 @@ def run(
     root = _results_root(spec, results_dir)
     outcomes: list[RunOutcome] = []
     interrupted = False
+    setup_failed = False
     try:
         for trial in range(1, repeat + 1):
             if repeat > 1:
@@ -269,6 +341,12 @@ def run(
                 execution=execution,
             )
             _index_outcome(root, outcome)
+            if outcome.result.overall.get("status") == "setup_failed":
+                # The environment is broken; remaining trials would fail
+                # identically. Evidence is already persisted.
+                setup_failed = True
+                _print_single_run_summary(spec, outcome.result, outcome.run_dir)
+                break
             if repeat > 1:
                 console.print(
                     f"Trial {trial}/{repeat}  {status_markup(outcome.result.overall.get('status'))}"
@@ -283,10 +361,13 @@ def run(
             f"\n[yellow]Interrupted — {len(outcomes)} completed trial(s) preserved.[/]"
         )
     except (UnknownAgentError, WorkspaceError, RuntimeError, OSError) as exc:
-        # OSError covers unresolvable/non-executable agent binaries — a setup
-        # error (exit 2), never a benchmark FAIL (exit 1).
+        # Last-resort guard: setup failures normally persist as evidence and
+        # return as outcomes; anything still raising here is AgentBench-level.
         console.print(f"[red]Run failed:[/]\n{exc}")
         raise typer.Exit(code=EXIT_ERROR) from exc
+
+    if setup_failed:
+        raise typer.Exit(code=EXIT_ERROR)
 
     if repeat > 1 and outcomes:
         _print_repeat_summary(outcomes)
@@ -379,9 +460,16 @@ def show(
     section("Outcome", [
         ("Status", overall.get("status") or row.get("status")),
         ("Failure reason", overall.get("failure_reason")),
+        ("Failure stage", overall.get("failure_stage")),
         ("Started", overall.get("started_at")),
         ("Duration", format_duration(overall.get("duration_seconds"))),
     ])
+
+    stage_timings = payload.get("stage_timings")
+    if stage_timings:
+        console.print("[bold]Stage timings[/]")
+        for name, seconds in sorted(stage_timings.items()):
+            console.print(f"  {name}: {format_duration(seconds)}")
 
     for title, evaluations in (
         ("Evaluations", payload.get("evaluations")),
@@ -502,10 +590,12 @@ app.add_typer(benchmark_app, name="benchmark")
 
 
 @benchmark_app.command("list")
-def benchmark_list() -> None:
+def benchmark_list(
+    suite: str | None = typer.Option(None, "--suite", help="Only benchmarks in this suite."),
+) -> None:
     """List benchmarks discovered in the corpus and ./benchmarks."""
-    table = Table(title="Benchmark corpus")
-    for column in ("NAME", "CATEGORY", "LANGUAGE", "HIDDEN", "PROTECTED", "DIFFICULTY"):
+    table = Table(title="Benchmark corpus" + (f" [suite={suite}]" if suite else ""))
+    for column in ("NAME", "CATEGORY", "LANGUAGE", "SUITES", "DIFFICULTY"):
         table.add_column(column)
     count = 0
     for manifest in discover():
@@ -514,12 +604,13 @@ def benchmark_list() -> None:
         except (LoaderError, ValidationError) as exc:
             console.print(f"[red]{manifest.parent.name}: invalid manifest[/] {exc}")
             continue
+        if suite is not None and suite not in spec.suites:
+            continue
         table.add_row(
             spec.name,
             spec.category or "—",
             spec.language or "—",
-            "yes" if spec.hidden_evaluations else "no",
-            "yes" if spec.protected_paths or spec.change_policies else "no",
+            ", ".join(spec.suites) or "—",
             spec.difficulty or "—",
         )
         count += 1
@@ -529,17 +620,83 @@ def benchmark_list() -> None:
 
 @benchmark_app.command("validate")
 def benchmark_validate(
-    benchmark: str = typer.Argument(..., help="Corpus name or path to a benchmark.yaml."),
+    benchmark: str | None = typer.Argument(None, help="Corpus name or path to a benchmark.yaml."),
+    all_benchmarks: bool = typer.Option(False, "--all", help="Validate the entire corpus."),
     extra_root: Path | None = typer.Option(None, "--path", help="Additional discovery root."),
 ) -> None:
-    """Validate solvability/structure of a benchmark without running an agent."""
+    """Validate solvability/structure without running an agent; --all sweeps the corpus."""
+    from agentbench.validation import validate_benchmark
+
+    if all_benchmarks:
+        from agentbench.validation import validate_corpus
+
+        reports = validate_corpus(extra_root=extra_root)
+        if not reports:
+            console.print("[yellow]No benchmarks discovered.[/]")
+            raise typer.Exit(code=EXIT_ERROR)
+
+        failed = [report for report in reports if not report.ok]
+        total = len(reports)
+
+        summary_table = Table(title=f"Corpus validation ({total} benchmarks)")
+        summary_table.add_column("BENCHMARK")
+        summary_table.add_column("RESULT", justify="right")
+        for report in reports:
+            summary_table.add_row(
+                report.name,
+                "[green]PASS[/]" if report.ok else "[red]FAIL[/]",
+            )
+        console.print(summary_table)
+
+        # Spec-style rollup over the check families that matter.
+        def count(check_name: str) -> str:
+            matching = [
+                any(name == check_name and ok for name, ok, _ in report.checks)
+                for report in reports
+            ]
+            return f"{sum(matching)}/{total}"
+
+        def baseline_ok(report) -> bool:
+            for name, ok, _ in report.checks:
+                if name == "baseline is broken as declared":
+                    if not ok:
+                        return False
+                elif name == "baseline evaluations pass" and not ok:
+                    return False
+            return True
+
+        patch_free = sum(
+            1 for r in reports
+            if any(n == "reference solution present" and ok for n, ok, _ in r.checks)
+        )
+        console.print(f"{count('manifest loads')} manifests load")
+        console.print(f"{count('commit resolves')} commits resolve")
+        console.print(f"{sum(1 for r in reports if baseline_ok(r))}/{total} baselines match declared state")
+        console.print(
+            f"{count('reference fix passes all evaluators')} reference fixes pass"
+            f" ({patch_free} patch-free)"
+        )
+        console.print(f"{count('fixture regeneration deterministic')} fixture regenerations deterministic")
+
+        for report in failed:
+            console.print(f"[bold red]{report.name}: failures[/]")
+            for check_name, ok, detail in report.checks:
+                if not ok:
+                    console.print(f"  [red]x[/] {check_name}: {detail}")
+
+        if failed:
+            raise typer.Exit(code=EXIT_FAIL)
+        console.print("[green]All corpus benchmarks are valid.[/]")
+        return
+
+    if benchmark is None:
+        console.print("[red]Provide a benchmark name/path or pass --all.[/]")
+        raise typer.Exit(code=EXIT_ERROR)
     try:
         manifest = find_manifest(benchmark, extra_root)
     except FileNotFoundError as exc:
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(code=EXIT_ERROR) from exc
-
-    from agentbench.validation import validate_benchmark
 
     report = validate_benchmark(manifest)
 
@@ -557,18 +714,101 @@ def benchmark_validate(
     console.print("[green]Benchmark is valid.[/]")
 
 
+@benchmark_app.command("report")
+def benchmark_report(
+    results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir"),
+    min_samples: int = typer.Option(5, "--min-samples", min=1,
+                                    help="Runs per config before a calibration flag is issued."),
+) -> None:
+    """Evidence-informed corpus view: pass rates, durations, calibration flags.
+
+    Difficulty labels stay provisional until real runs accumulate; this
+    report never rewrites them automatically.
+    """
+    from agentbench.loader import load_benchmark
+
+    index = _open_index(results_dir)
+    rows = index.query(limit=None)
+
+    metadata: dict[str, dict] = {}
+    for manifest in discover():
+        try:
+            spec_meta = load_benchmark(manifest)
+        except (LoaderError, ValidationError):
+            continue
+        metadata[spec_meta.name] = {
+            "category": spec_meta.category,
+            "difficulty": spec_meta.difficulty,
+        }
+
+    by_benchmark: dict[str, list[dict]] = {}
+    for row in rows:
+        by_benchmark.setdefault(row["benchmark"], []).append(row)
+
+    table = Table(title="Corpus report (evidence-informed)")
+    for column in ("BENCHMARK", "CATEGORY", "DIFFICULTY", "RUNS", "PASS RATE",
+                   "MEDIAN TIME", "MEDIAN TOKENS", "CALIBRATION"):
+        table.add_column(column)
+
+    def calibration(rate: float | None, n: int) -> str:
+        if n < min_samples or rate is None:
+            return "[dim]uncalibrated[/]"
+        if rate >= 0.90:
+            return "[yellow]too easy?[/]"
+        if rate <= 0.10:
+            return "[yellow]too hard?[/]"
+        return "[green]calibrated[/]"
+
+    for name in sorted(set(metadata) | set(by_benchmark)):
+        bench_rows = by_benchmark.get(name, [])
+        groups = aggregate_by_config(bench_rows)
+        runs = sum(g.runs for g in groups)
+        passes = sum(g.passes for g in groups)
+        rate = (passes / runs) if runs else None
+        durations = [d for g in groups for d in g.durations]
+        tokens = [t for g in groups for t in g.total_tokens]
+        median_time = format_duration(statistics.median(durations)) if durations else "—"
+        median_tokens = format_count(statistics.median(tokens)) if tokens else "—"
+        meta = metadata.get(name, {})
+        table.add_row(
+            name,
+            meta.get("category") or "—",
+            meta.get("difficulty") or "—",
+            str(runs),
+            format_percent(rate),
+            median_time,
+            median_tokens,
+            calibration(rate, runs),
+        )
+    console.print(table)
+    console.print(
+        f"[dim]Calibration flags need ≥{min_samples} run(s) per benchmark;"
+        " difficulty labels are provisional metadata and never rewritten automatically.[/]"
+    )
+
+
 @app.command()
 def experiment(
     experiment_file: Path = typer.Argument(..., exists=True, readable=True, help="Experiment YAML."),
     resume: str | None = typer.Option(None, "--resume", help="Resume this experiment id."),
     keep_workspace: bool = typer.Option(False, "--keep-workspace"),
     timeout_seconds: float | None = typer.Option(None, "--timeout-seconds", min=0.1),
+    jobs: int = typer.Option(1, "--jobs", min=1, max=MAX_JOBS,
+                             help=f"Cells run concurrently (each gets an independent workspace); 1–{MAX_JOBS}."),
+    max_runs: int | None = typer.Option(None, "--max-runs", min=1,
+                                        help="Hard cap on cells executed this invocation; stop cleanly when reached (resumable)."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show the resolved plan and exit; no workspaces or runs."),
 ) -> None:
     """Run a benchmark × config × repeat matrix; resumable via --resume.
 
+    Benchmarks come either as explicit names or a metadata selector
+    (suite/tags/category); the resolved list is persisted at creation so
+    later corpus changes cannot silently alter the experiment.
+
     Exit code 0 means the matrix ran to completion — cell outcomes (including
     failures) are results, not errors. Exit 130 on interrupt; 2 on setup
-    problems.
+    problems. ``--jobs N`` runs up to N cells at once; Ctrl+C stops scheduling
+    new cells and lets in-flight ones finish so their evidence stays complete.
     """
     from agentbench.models import ExperimentSpec
 
@@ -580,11 +820,45 @@ def experiment(
         console.print(f"[red]Invalid experiment file ({experiment_file}):[/]\n{exc}")
         raise typer.Exit(code=EXIT_ERROR) from exc
 
+    results_dir = Path(spec.results_dir)
+
+    # Metadata selectors resolve exactly once; a resumed experiment reuses its
+    # stored benchmark list so later corpus changes cannot alter it.
+    stored_benchmarks: list[str] | None = None
+    if resume:
+        try:
+            existing = load_manifest(results_dir / "experiments" / resume / "experiment.json")
+        except ExperimentError as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(code=EXIT_ERROR) from exc
+        stored_benchmarks = list(existing.resolved_benchmarks) or None
+
+    try:
+        benchmark_names = select_benchmarks(spec.benchmarks) \
+            if not isinstance(spec.benchmarks, list) else list(spec.benchmarks)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=EXIT_ERROR) from exc
+    if stored_benchmarks is not None:
+        # Resume always runs the ORIGINAL resolved list. An explicit list in
+        # the yaml must still match it; a selector is simply ignored in favor
+        # of what was persisted at creation time.
+        if isinstance(spec.benchmarks, list) and sorted(spec.benchmarks) != sorted(stored_benchmarks):
+            console.print(
+                "[red]Cannot resume:[/] experiment's benchmarks were"
+                f" {sorted(stored_benchmarks)}; the file now lists {sorted(spec.benchmarks)}."
+            )
+            raise typer.Exit(code=EXIT_ERROR)
+        benchmark_names = stored_benchmarks
+
+    total_cells = len(benchmark_names) * len(spec.configs) * spec.repeat
+
     manifests: dict[str, Path] = {}
     hashes: dict[str, str] = {}
     specs: dict[str, BenchmarkSpec] = {}
     repositories: dict[str, str] = {}
-    for name in spec.benchmarks:
+    unavailable_adapters: list[str] = []
+    for name in benchmark_names:
         try:
             manifest_path = find_manifest(name)
         except FileNotFoundError as exc:
@@ -597,21 +871,66 @@ def experiment(
         repositories[name] = resolve_repository_path(
             bench_spec.repository, base_dir=manifest_path.parent
         )
-
-    plans = plan_cells(spec, manifests, hashes)
-
-    results_dir = Path(spec.results_dir)
-    if resume:
+    for config in spec.configs:
         try:
-            manifest = load_manifest(results_dir / "experiments" / resume / "experiment.json")
-        except ExperimentError as exc:
-            console.print(f"[red]{exc}[/]")
-            raise typer.Exit(code=EXIT_ERROR) from exc
+            get_adapter(config.agent.type)
+        except UnknownAgentError as exc:
+            unavailable_adapters.append(f"{config.name}: {exc}")
+
+    plans = plan_cells(spec, manifests, hashes, benchmarks=benchmark_names)
+
+    # --dry-run: pure plan inspection. No manifest, no directories, no runs.
+    if dry_run:
+        console.print(f"[bold]Dry run[/] — nothing will be executed.")
+        console.print(f"Experiment: {spec.name}")
+        console.print(
+            f"Benchmarks ({len(benchmark_names)}): {', '.join(benchmark_names)}"
+        )
+        for config in spec.configs:
+            eff_execution = (
+                spec.execution.merged_with(config.execution)
+                if (spec.execution or config.execution)
+                else None
+            )
+            backend_name = eff_execution.backend if eff_execution else (
+                specs[benchmark_names[0]].execution.backend
+                if specs[benchmark_names[0]].execution else "host"
+            )
+            limits = ", ".join(
+                filter(None, [
+                    f"memory={eff_execution.memory}" if eff_execution and eff_execution.memory else "",
+                    f"cpus={eff_execution.cpus}" if eff_execution and eff_execution.cpus else "",
+                    f"pids={eff_execution.pids_limit}" if eff_execution and eff_execution.pids_limit else "",
+                ])
+            ) or "unlimited"
+            console.print(
+                f"Config {config.name}: agent={config.agent.type}"
+                + (f"/{config.agent.model}" if config.agent.model else "")
+                + f", backend={backend_name}, resources={limits}"
+            )
+        console.print(
+            f"Repeats: {spec.repeat}   Total cells: {total_cells}   "
+            f"Max parallelism: {min(jobs, total_cells) if total_cells else 0}"
+        )
+        for note in unavailable_adapters:
+            console.print(f"[yellow]Unavailable adapter:[/] {note}")
+        if any(
+            ((spec.execution.merged_with(c.execution) if (spec.execution or c.execution) else None)
+             or ExecutionSpec()).backend == "docker"
+            for c in spec.configs
+        ):
+            from agentbench.backends.docker import docker_available
+            if not docker_available():
+                console.print("[yellow]Docker daemon unreachable — docker configs would fail.[/]")
+        return
+
+    if resume:
+        manifest = existing
         for name, stored_hash in manifest.benchmark_identities.items():
             if hashes.get(name) != stored_hash:
                 console.print(
                     f"[red]Cannot resume:[/] benchmark '{name}' changed since the original"
-                    f" run (config hash {stored_hash} → {hashes.get(name)})."
+                    f" run (config hash {stored_hash} -> {hashes.get(name)})."
                 )
                 raise typer.Exit(code=EXIT_ERROR)
         for config in spec.configs:
@@ -626,93 +945,162 @@ def experiment(
         experiment_id = resume
     else:
         experiment_id = experiment_id_for(spec.name)
-        manifest = new_manifest(spec, experiment_id, results_dir)
+        manifest = new_manifest(spec, experiment_id, results_dir, resolved_benchmarks=benchmark_names)
         manifest.benchmark_identities = dict(hashes)
 
     console.print(f"[bold]Experiment {experiment_id}[/]: {spec.name}")
     console.print(
-        f"Plan: {len(spec.benchmarks)} benchmark(s) × {len(spec.configs)} config(s)"
-        f" × {spec.repeat} trial(s) = [bold]{spec.cell_count}[/] runs"
+        f"Plan: {len(benchmark_names)} benchmark(s) × {len(spec.configs)} config(s)"
+        f" × {spec.repeat} trial(s) = [bold]{total_cells}[/] runs"
     )
 
-    done = skipped = 0
-    interrupted = False
+    # Resource-aware planning: Docker containers without resource limits are
+    # effectively unbounded; refuse to start many of them at once.
+    effective_jobs = jobs
+    unbounded_docker = []
+    for config in spec.configs:
+        eff_execution = (
+            spec.execution.merged_with(config.execution)
+            if (spec.execution or config.execution)
+            else None
+        )
+        has_limits = bool(
+            eff_execution and (eff_execution.memory or eff_execution.cpus or eff_execution.pids_limit)
+        )
+        if eff_execution is not None and eff_execution.backend == "docker" and not has_limits:
+            unbounded_docker.append(config.name)
+    if unbounded_docker and effective_jobs > 4:
+        effective_jobs = 4
+        console.print(
+            "[yellow]Note:[/] docker configs without memory/cpus/pids limits are"
+            f" unbounded; parallelism clamped to 4 (configs: {', '.join(unbounded_docker)})."
+            " Set execution resource limits to raise it."
+        )
+    console.print(f"Backend: {manifest.execution_backend or 'host'}   Jobs: {effective_jobs}")
+
     total = len(plans)
-    try:
-        for index, plan in enumerate(plans, start=1):
-            label = (
-                f"[{index:02d}/{total:02d}] {plan.benchmark_name} / {plan.config_name} /"
-                f" trial {plan.trial}"
-            )
-            if manifest.cell_done(plan.cell_key):
-                skipped += 1
-                console.print(f"{label}   [dim]already complete — skipping[/]")
-                continue
-            console.print(f"{label}   running…")
-            cell_spec = specs[plan.benchmark_name]
-            config = next(c for c in spec.configs if c.name == plan.config_name)
-            execution = (
-                spec.execution.merged_with(config.execution)
-                if (spec.execution or config.execution)
-                else None
-            )
-            try:
-                outcome = run_benchmark(
-                    cell_spec,
-                    adapter=get_adapter(config.agent.type),
-                    results_root=results_dir,
-                    keep_workspace=keep_workspace,
-                    timeout_seconds=timeout_seconds,
-                    trial=plan.trial,
-                    repository=repositories[plan.benchmark_name],
-                    benchmark_dir=manifests[plan.benchmark_name].parent,
-                    manifest_path=manifests[plan.benchmark_name],
-                    execution=execution,
-                    agent_override=config.agent,
-                    experiment_id=experiment_id,
-                    config_name=plan.config_name,
-                )
-            except (OSError, RuntimeError) as exc:
-                # A broken cell must not abort the remaining matrix.
-                status = "setup_failed"
-                detail = f"{type(exc).__name__}: {exc}"
-                manifest.record({
-                    "cell_key": plan.cell_key,
-                    "benchmark": plan.benchmark_name,
-                    "config": plan.config_name,
-                    "trial": plan.trial,
-                    "status": status,
-                    "run_id": None,
-                    "run_dir": None,
-                    "error": detail,
-                })
-                save_manifest(manifest, results_dir / "experiments" / experiment_id)
-                console.print(f"{label}   [red]ERROR[/]  {detail}")
-                done += 1
-                continue
+    todo: list[tuple] = []
+    skipped = 0
+    for index, plan in enumerate(plans, start=1):
+        label = (
+            f"[{index:02d}/{total:02d}] {plan.benchmark_name} / {plan.config_name} /"
+            f" trial {plan.trial}"
+        )
+        if manifest.cell_done(plan.cell_key):
+            skipped += 1
+            console.print(f"{label}   [dim]already complete — skipping[/]")
+        else:
+            todo.append((plan, label))
+
+    executed_count = {"n": 0}
+
+    def run_cell(job):
+        plan, _label = job
+        cell_spec = specs[plan.benchmark_name]
+        config = next(c for c in spec.configs if c.name == plan.config_name)
+        execution_eff = (
+            spec.execution.merged_with(config.execution)
+            if (spec.execution or config.execution)
+            else None
+        )
+        return run_benchmark(
+            cell_spec,
+            adapter=get_adapter(config.agent.type),
+            results_root=results_dir,
+            keep_workspace=keep_workspace,
+            timeout_seconds=timeout_seconds,
+            trial=plan.trial,
+            repository=repositories[plan.benchmark_name],
+            benchmark_dir=manifests[plan.benchmark_name].parent,
+            manifest_path=manifests[plan.benchmark_name],
+            execution=execution_eff,
+            agent_override=config.agent,
+            experiment_id=experiment_id,
+            config_name=plan.config_name,
+        )
+
+    def record_cell(plan, **fields) -> None:
+        manifest.record({
+            "cell_key": plan.cell_key,
+            "benchmark": plan.benchmark_name,
+            "config": plan.config_name,
+            "trial": plan.trial,
+            **fields,
+        })
+        save_manifest(manifest, results_dir / "experiments" / experiment_id)
+
+    def complete_cell(job, future) -> None:
+        plan, label = job
+        try:
+            outcome = future.result()
+        except Exception as exc:  # noqa: BLE001 - one broken cell never aborts the matrix
+            detail = f"{type(exc).__name__}: {exc}"
+            record_cell(plan, status="setup_failed", run_id=None, run_dir=None, error=detail)
+            console.print(f"{label}   [red]ERROR[/]  {detail}")
+            executed_count["n"] += 1
+            return
+        if outcome is CANCELLED:
+            return  # never started; resume will pick these up
+        if outcome.result.overall.get("status") == "setup_failed":
+            # Persisted evidence exists; the matrix continues.
             _index_outcome(results_dir, outcome)
-            manifest.record({
-                "cell_key": plan.cell_key,
-                "benchmark": plan.benchmark_name,
-                "config": plan.config_name,
-                "trial": plan.trial,
-                "status": outcome.result.overall["status"],
-                "run_id": outcome.result.run_id,
-                "run_dir": str(outcome.run_dir),
-            })
-            save_manifest(manifest, results_dir / "experiments" / experiment_id)
-            console.print(
-                f"{label}   {status_markup(outcome.result.overall.get('status'))}"
-                f"  ({format_duration(outcome.result.overall.get('duration_seconds'))})"
+            record_cell(
+                plan,
+                status="setup_failed",
+                run_id=outcome.result.run_id,
+                run_dir=str(outcome.run_dir),
+                error=outcome.result.overall.get("failure_reason"),
             )
-            done += 1
-    except KeyboardInterrupt:
-        interrupted = True
+            console.print(
+                f"{label}   [red]SETUP FAILED[/]"
+                f" [{outcome.result.overall.get('failure_stage')}]"
+                f"  {outcome.result.overall.get('failure_reason')}"
+            )
+            executed_count["n"] += 1
+            return
+        _index_outcome(results_dir, outcome)
+        record_cell(
+            plan,
+            status=outcome.result.overall["status"],
+            run_id=outcome.result.run_id,
+            run_dir=str(outcome.run_dir),
+        )
+        console.print(
+            f"{label}   {status_markup(outcome.result.overall.get('status'))}"
+            f"  ({format_duration(outcome.result.overall.get('duration_seconds'))})"
+        )
+        executed_count["n"] += 1
+
+    scheduler = Scheduler(effective_jobs)
+
+    def mark_interrupted() -> None:
         manifest.interrupted = True
         save_manifest(manifest, results_dir / "experiments" / experiment_id)
+
+    # --max-runs is enforced by the scheduler at submission time: no over-budget
+    # cell is ever launched. Cells already complete on resume were filtered out
+    # of `todo` above, so they cannot consume the budget.
+    was_interrupted = scheduler.run(
+        todo, run_cell, complete_cell,
+        on_interrupt=mark_interrupted,
+        max_starts=max_runs,
+    )
+    stopped_by_budget = scheduler.budget_exhausted
+
+    if scheduler.stop_requested and not manifest.interrupted:
+        mark_interrupted()
+
+    if was_interrupted and not stopped_by_budget:
         console.print(
-            f"\n[yellow]Interrupted — {done} new run(s) preserved;"
-            f" experiment marked incomplete.[/]"
+            "\n[yellow]Interrupted — completed runs preserved; experiment marked"
+            " incomplete. Resume with:[/] agentbench experiment"
+            f" {experiment_file} --resume {experiment_id}"
+        )
+    elif stopped_by_budget:
+        console.print(
+            f"\n[yellow]Stopped after {executed_count['n']} executed run(s) (--max-runs)."
+            f" Resume with:[/] agentbench experiment {experiment_file}"
+            f" --resume {experiment_id}"
         )
 
     console.print(
@@ -735,7 +1123,7 @@ def experiment(
                 f" median tokens {format_count(group.median_total_tokens)}"
             )
 
-    if interrupted:
+    if was_interrupted and not stopped_by_budget:
         raise typer.Exit(code=EXIT_INTERRUPTED)
 
 
@@ -799,7 +1187,7 @@ def reproduce(
     _index_outcome(Path(results_dir), outcome)
 
     checks = condition_checks(original, outcome.result.model_dump(mode="json"))
-    table = Table(title=f"Provenance: {run_id} → {outcome.result.run_id}")
+    table = Table(title=f"Provenance: {run_id} -> {outcome.result.run_id}")
     table.add_column("Condition")
     table.add_column("Match", justify="right")
     table.add_column("Values")
@@ -813,6 +1201,8 @@ def reproduce(
 def export(
     experiment: str | None = typer.Option(None, "--experiment", help="Export one experiment's runs."),
     benchmark_name: str | None = typer.Option(None, "--benchmark"),
+    agent: str | None = typer.Option(None, "--agent", help="Filter by adapter type."),
+    status: str | None = typer.Option(None, "--status", help="Filter by outcome status."),
     fmt: str = typer.Option("csv", "--format", help="csv or json"),
     output: Path | None = typer.Option(None, "--output", help="Write to file instead of stdout."),
     results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir"),
@@ -821,7 +1211,10 @@ def export(
     from agentbench.export import write_export
 
     index = _open_index(results_dir)
-    rows = index.query(experiment_id=experiment, benchmark=benchmark_name, limit=None)
+    rows = index.query(
+        experiment_id=experiment, benchmark=benchmark_name,
+        agent=agent, status=status, limit=None,
+    )
     if not rows:
         console.print("No matching runs to export.")
         return

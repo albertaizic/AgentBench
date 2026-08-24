@@ -136,6 +136,12 @@ class ExecutionSpec(BaseModel):
     cpus: float | None = Field(default=None, gt=0)  # docker --cpus
     pids_limit: int | None = Field(default=None, gt=0)  # docker --pids-limit
     pass_env: list[str] = Field(default_factory=list)
+    # Host-backend environment policy. "inherit" (default) passes the full
+    # parent environment through — required when an agent authenticates from
+    # ambient state. "restricted" starts from a minimal OS base plus the
+    # ``pass_env`` allowlist and points HOME/USERPROFILE at a throwaway
+    # directory, so agents that do not need ambient config cannot read it.
+    env_policy: Literal["inherit", "restricted"] = "inherit"
 
     @field_validator("pass_env")
     @classmethod
@@ -165,6 +171,7 @@ class ExecutionSpec(BaseModel):
                 override_value if override_value is not None else getattr(self, name)
             )
         fields["pass_env"] = sorted(set(self.pass_env) | set(override.pass_env))
+        fields["env_policy"] = override.env_policy if override.env_policy != "inherit" else self.env_policy
         return ExecutionSpec(**fields)
 
 
@@ -209,6 +216,34 @@ class ReferenceSolution(BaseModel):
         return _reject_unsafe_relative(value, "reference_solution.patch")
 
 
+# Descriptive metadata: documentation for humans and corpus tooling. It never
+# influences how a run executes or scores, so it is excluded from config
+# identity — editing a description must not invalidate evidence produced
+# before the edit (and vice versa).
+_BENCHMARK_METADATA_FIELDS = (
+    "description", "category", "tags", "suites", "language",
+    "difficulty", "reference_solution", "expect_broken_baseline",
+)
+
+_NON_IDENTITY_FIELDS = ("results_dir", "execution", "_benchmark_manifest",
+                        *_BENCHMARK_METADATA_FIELDS)
+
+
+def benchmark_hash_from_snapshot(snapshot: dict) -> str:
+    """Hash a stored config snapshot under the CURRENT identity rules.
+
+    Used by ``reproduce`` so old evidence is compared against the live
+    manifest with today's semantics instead of trusting a digest computed
+    under whatever rules existed when the run was recorded.
+    """
+    normalized = {
+        key: value for key, value in snapshot.items()
+        if key not in _NON_IDENTITY_FIELDS
+    }
+    canonical = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+
+
 class BenchmarkSpec(BaseModel):
     """A complete, self-contained benchmark definition."""
 
@@ -231,6 +266,9 @@ class BenchmarkSpec(BaseModel):
     description: str | None = None
     category: str | None = None
     tags: list[str] = Field(default_factory=list)
+    # Declarative suite membership (e.g. smoke, python-core, performance);
+    # suites are corpus metadata, never hardcoded CLI lists.
+    suites: list[str] = Field(default_factory=list)
     language: str | None = None
     difficulty: Literal["easy", "medium", "hard"] | None = None
     reference_solution: ReferenceSolution | None = None
@@ -266,21 +304,27 @@ class BenchmarkSpec(BaseModel):
         hidden = self.hidden_evaluations.evaluations if self.hidden_evaluations else []
         return [*self.evaluations, *hidden]
 
+    # Descriptive metadata: documentation for humans and corpus tooling. It
+    # never influences how a run executes or scores, so it stays OUT of
+    # config identity — editing a description must not invalidate evidence
+    # produced before the edit (and vice versa).
     def config_snapshot(self) -> dict:
         """JSON-safe snapshot of the configuration used for a run.
 
-        The execution block is excluded: it describes *where* an experiment
-        runs (provenance, compared separately), not what the experiment is.
+        Excluded: ``results_dir`` (machine-local), ``execution`` (describes
+        *where* an experiment runs — provenance, compared separately), and
+        the descriptive metadata block (never evaluation-relevant).
         """
         payload = self.model_dump(mode="json")
         payload.pop("results_dir", None)
         payload.pop("execution", None)
+        for name in _BENCHMARK_METADATA_FIELDS:
+            payload.pop(name, None)
         return payload
 
     def config_hash(self) -> str:
         """Stable short identity of this benchmark configuration."""
-        canonical = json.dumps(self.config_snapshot(), sort_keys=True, ensure_ascii=False)
-        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+        return benchmark_hash_from_snapshot(self.config_snapshot())
 
 
 # -- experiment schemas -------------------------------------------------------
@@ -304,27 +348,60 @@ class ConfigSpec(BaseModel):
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
 
 
+class BenchmarkSelection(BaseModel):
+    """Select benchmarks by corpus metadata instead of explicit names.
+
+    Exactly one criterion is required; resolution to concrete benchmark
+    names happens once, before execution, and the resolved list is persisted
+    into the experiment manifest so later corpus changes never silently
+    alter an already-created experiment.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    suite: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    category: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_criterion(self) -> "BenchmarkSelection":
+        provided = [name for name in ("suite", "category") if getattr(self, name)]
+        if self.tags:
+            provided.append("tags")
+        if len(provided) != 1:
+            raise ValueError(
+                "benchmark selection requires exactly one of suite / tags / category,"
+                f" got {provided or 'none'}"
+            )
+        return self
+
+
 class ExperimentSpec(BaseModel):
     """A benchmark × config × repeat matrix."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(pattern=_NAME_PATTERN)
-    benchmarks: list[str] = Field(min_length=1)
+    # Explicit benchmark names, or a metadata selector (suite/tags/category).
+    benchmarks: list[str] | BenchmarkSelection
     configs: list[ConfigSpec] = Field(min_length=1)
     repeat: int = Field(default=1, ge=1, le=100)
     execution: ExecutionSpec | None = None  # experiment-level default
     results_dir: str = "results"
 
     @model_validator(mode="after")
-    def _config_names_must_be_unique(self) -> "ExperimentSpec":
+    def _validate_shape(self) -> "ExperimentSpec":
         names = [config.name for config in self.configs]
         if len(names) != len(set(names)):
             raise ValueError("experiment config names must be unique")
-        if len(set(self.benchmarks)) != len(self.benchmarks):
-            raise ValueError("experiment benchmark names must be unique")
+        if isinstance(self.benchmarks, list):
+            if not self.benchmarks:
+                raise ValueError("experiment needs at least one benchmark")
+            if len(set(self.benchmarks)) != len(self.benchmarks):
+                raise ValueError("experiment benchmark names must be unique")
         return self
 
     @property
     def cell_count(self) -> int:
-        return len(self.benchmarks) * len(self.configs) * self.repeat
+        count = len(self.benchmarks) if isinstance(self.benchmarks, list) else 0
+        return count * len(self.configs) * self.repeat

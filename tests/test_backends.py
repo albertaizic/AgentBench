@@ -15,6 +15,7 @@ from agentbench.backends.docker import (
     validate_mount_path,
 )
 from agentbench.models import ExecutionSpec
+from agentbench.process import ProcessResult
 
 
 @pytest.fixture(autouse=True)
@@ -95,6 +96,77 @@ class TestDockerCommandConstruction:
 
         image_at = args.index("python:3.12-slim")
         assert args[image_at + 1:] == ["claude", "--print"]
+
+    def test_containers_are_named_and_unique_per_instance(self, tmp_path):
+        first = self.backend(tmp_path)
+        second = self.backend(tmp_path)
+
+        args = first.container_args(tmp_path / "ws")
+
+        name = args[args.index("--name") + 1]
+        assert name.startswith("agentbench-")
+        assert name != second.container_name
+
+
+class TestDockerTimeoutCleanup:
+    """A killed host-side ``docker run`` CLI leaves the container running;
+    backend.cleanup() must force-remove it by its recorded name."""
+
+    @pytest.fixture
+    def invocations(self, monkeypatch):
+        import agentbench.backends.docker as docker_mod
+
+        calls: list[list[str]] = []
+
+        def fake_run_command(argv, **kwargs):
+            calls.append(list(argv))
+            return ProcessResult(exit_code=0, stdout="", stderr="", duration_seconds=0.1)
+
+        monkeypatch.setattr(docker_mod, "run_command", fake_run_command)
+        return calls
+
+    def backend(self, tmp_path) -> DockerExecutionBackend:
+        spec = ExecutionSpec(backend="docker", network="disabled")
+        return DockerExecutionBackend(spec, allowed_roots=[tmp_path])
+
+    def test_cleanup_after_started_run_force_removes_container(self, tmp_path, invocations):
+        backend = self.backend(tmp_path)
+        # Simulate the docker CLI being killed by a timeout mid-run.
+        invocations.append([])
+        backend._container_started = True
+
+        backend.cleanup()
+
+        assert any(
+            argv[-3:-1] == ["rm", "-f"] and argv[-1] == backend.container_name
+            for argv in invocations
+            if len(argv) >= 3
+        ), f"no force-remove in {invocations}"
+
+    def test_cleanup_before_any_start_is_a_noop(self, tmp_path, invocations):
+        backend = self.backend(tmp_path)
+
+        backend.cleanup()
+
+        assert invocations == []
+
+    def test_cleanup_swallows_rm_failures(self, tmp_path, monkeypatch):
+        import agentbench.backends.docker as docker_mod
+
+        backend = self.backend(tmp_path)
+        backend._container_started = True
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("docker daemon vanished")
+
+        monkeypatch.setattr(docker_mod, "run_command", boom)
+
+        backend.cleanup()  # must not raise
+
+    def test_provenance_records_container_name(self, tmp_path):
+        backend = self.backend(tmp_path)
+
+        assert backend.provenance()["container_name"] == backend.container_name
 
 
 class TestCredentialForwarding:

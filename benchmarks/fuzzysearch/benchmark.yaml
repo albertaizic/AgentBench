@@ -33,6 +33,7 @@ protected_paths:
 fail_on_protected_path_violation: true
 category: performance
 tags: [algorithm, complexity]
+suites: [python-core, performance]
 language: python
 difficulty: hard
 expect_broken_baseline: true

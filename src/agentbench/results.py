@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class RunResult(BaseModel):
@@ -39,7 +39,9 @@ class RunResult(BaseModel):
     evaluations: list[dict[str, Any]]
     hidden_evaluations: list[dict[str, Any]] = []
     protected_paths: dict[str, Any] | None = None
-    overall: dict[str, Any]  # status/failure_reason/started_at/finished_at/duration_seconds
+    overall: dict[str, Any]
+    # status/failure_reason/failure_stage/started_at/finished_at/duration_seconds;
+    # failure_stage names WHERE a failure happened (see agentbench.stages).
     execution: dict[str, Any] | None = None  # backend provenance (host/docker)
     environment: dict[str, Any]
     config: dict[str, Any]  # snapshot of the BenchmarkSpec used
@@ -47,6 +49,7 @@ class RunResult(BaseModel):
     config_name: str | None = None
     workspace_kept: bool = False
     workspace_path: str | None = None
+    stage_timings: dict[str, float] | None = None  # per-phase wall-clock seconds
 
 
 @dataclass(frozen=True)

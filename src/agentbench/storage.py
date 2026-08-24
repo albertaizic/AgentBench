@@ -20,7 +20,10 @@ import json
 import sqlite3
 from pathlib import Path
 
-SCHEMA_USER_VERSION = 2
+SCHEMA_USER_VERSION = 3
+# Seconds a write waits for a competing writer before failing. Parallel
+# experiment indexing makes brief contention normal, not exceptional.
+_SQLITE_BUSY_TIMEOUT = 10.0
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -68,6 +71,12 @@ _MIGRATIONS = {
         "ALTER TABLE runs ADD COLUMN files_deleted INTEGER",
         "CREATE INDEX IF NOT EXISTS idx_runs_experiment ON runs(experiment_id)",
     ],
+    # v3 migration: WHERE a failure happened (see agentbench.stages) and how
+    # often protected paths were touched.
+    3: [
+        "ALTER TABLE runs ADD COLUMN failure_stage TEXT",
+        "ALTER TABLE runs ADD COLUMN violation_count INTEGER",
+    ],
 }
 
 
@@ -81,7 +90,12 @@ class ResultIndex:
     def __init__(self, db_path: Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path)
+        self._conn = sqlite3.connect(self.db_path, timeout=_SQLITE_BUSY_TIMEOUT)
+        # Parallel experiments open several short-lived writers. WAL lets
+        # readers proceed during writes and busy_timeout turns rare write
+        # collisions into brief waits instead of "database is locked" errors.
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute(f"PRAGMA busy_timeout={int(_SQLITE_BUSY_TIMEOUT * 1000)}")
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         version = self._conn.execute("PRAGMA user_version").fetchone()[0]
@@ -123,8 +137,9 @@ class ResultIndex:
                 execution_backend, image_id, image_digest,
                 experiment_id, config_name,
                 files_added, files_deleted,
+                failure_stage, violation_count,
                 result_dir, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(payload["run_id"]),
@@ -157,6 +172,8 @@ class ResultIndex:
                 payload.get("config_name"),
                 _list_len_or_none(diff.get("added_files")),
                 _list_len_or_none(diff.get("deleted_files")),
+                overall.get("failure_stage"),
+                _violation_count(payload),
                 str(result_dir),
                 str(overall.get("finished_at") or overall.get("started_at") or ""),
             ),
@@ -193,6 +210,7 @@ class ResultIndex:
         status: str | None = None,
         experiment_id: str | None = None,
         limit: int | None = 50,
+        offset: int = 0,
     ) -> list[dict]:
         sql = "SELECT * FROM runs WHERE 1=1"
         params: list = []
@@ -211,10 +229,8 @@ class ResultIndex:
         if experiment_id is not None:
             sql += " AND experiment_id = ?"
             params.append(experiment_id)
-        sql += " ORDER BY created_at DESC, run_id DESC"
-        if limit is not None:
-            sql += " LIMIT ?"
-            params.append(limit)
+        sql += " ORDER BY created_at DESC, run_id DESC LIMIT ? OFFSET ?"
+        params.extend([limit if limit is not None else -1, max(0, offset)])
         return [dict(row) for row in self._conn.execute(sql, params)]
 
     def get_run(self, run_id: str) -> dict | None:
@@ -246,3 +262,11 @@ def _as_float(value) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     return None
+
+
+def _violation_count(payload: dict) -> int | None:
+    protected = payload.get("protected_paths")
+    if not isinstance(protected, dict):
+        return None
+    violations = protected.get("violations")
+    return len(violations) if isinstance(violations, list) else 0

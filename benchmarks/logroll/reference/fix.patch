@@ -1,0 +1,37 @@
+diff --git a/logroll/setup.py b/logroll/setup.py
+index a9cb08d..91368a5 100644
+--- a/logroll/setup.py
++++ b/logroll/setup.py
+@@ -7,6 +7,7 @@ import sys
+ 
+ 
+ LOGGER_NAME = "logroll.app"
++_FORMAT = "%(levelname)s %(name)s: %(message)s"
+ 
+ 
+ def configure_logger(level: int = logging.INFO,
+@@ -14,10 +15,19 @@ def configure_logger(level: int = logging.INFO,
+     logger = logging.getLogger(LOGGER_NAME)
+     logger.setLevel(level)
+     handler = logging.StreamHandler(stream or sys.stdout)
+-    handler.setFormatter(
+-        logging.Formatter("%(levelname)s %(name)s: %(message)s")
+-    )
+-    # BUG: appends unconditionally - duplicates on every reload and
+-    # leaks previously attached (possibly file) handlers.
++    handler.setFormatter(logging.Formatter(_FORMAT))
++    # Idempotent: same-config calls never duplicate handlers; a real
++    # change replaces (and closes) the previous set.
++    existing = logger.handlers
++    if len(existing) == 1 and isinstance(existing[0], logging.StreamHandler):
++        current = existing[0]
++        same_stream = getattr(current, 'stream', None) is handler.stream
++        if (same_stream and logger.level == level
++                and current.formatter is not None
++                and current.formatter._fmt == _FORMAT):
++            return logger
++    for old in existing:
++        logger.removeHandler(old)
++        old.close()
+     logger.addHandler(handler)
+     return logger

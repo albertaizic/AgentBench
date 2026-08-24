@@ -1,0 +1,42 @@
+name: retryloop
+repository: fixture
+commit: 5bcddecb2dc1c9b147da03915abfb7da16f948c6
+description: |
+  Retry helper retries non-retryable errors and swallows the final
+  exception, so callers see None instead of the underlying failure.
+prompt: |
+  Our HTTP client's retry helper misbehaves in two ways:
+
+  1. It retries EVERY exception. Only RetryableError (and its subclasses)
+     may be retried; anything else must propagate immediately on first
+     occurrence.
+  2. When attempts are exhausted, it returns None instead of re-raising the
+     LAST RetryableError it saw. Callers therefore crash later with a
+     confusing TypeError instead of seeing the real network error.
+
+  Fix run_with_retry() to honor both rules. Keep the signature and the
+  on_retry callback semantics (called before each subsequent attempt).
+  The failing public tests pin the contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: retry-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [error-handling]
+suites: [python-core, bugfix]
+language: python
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

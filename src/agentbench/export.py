@@ -27,6 +27,7 @@ EXPORT_COLUMNS = [
     "image_id",
     "status",
     "failure_reason",
+    "failure_stage",
     "trial",
     "started_at",
     "duration_seconds",

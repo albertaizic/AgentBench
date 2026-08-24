@@ -134,9 +134,17 @@ def run_command(
     cwd: Path,
     timeout: float | None = None,
     input_text: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> ProcessResult:
-    """Run *argv* directly (no shell), capturing everything."""
-    return _execute(argv, shell=False, cwd=cwd, timeout=timeout, input_text=input_text)
+    """Run *argv* directly (no shell), capturing everything.
+
+    ``env=None`` inherits the parent environment (plus the Windows
+    cwd-hijacking opt-out); an explicit dict replaces it entirely.
+    """
+    resolved_env = env if env is not None else _child_env()
+    return _execute(
+        argv, shell=False, cwd=cwd, timeout=timeout, input_text=input_text, env=resolved_env
+    )
 
 
 def run_shell_command(

@@ -1,0 +1,23 @@
+name: probe-bad-image
+repository: ../benchmarks/jobqueue/fixture
+commit: f252c9eaf5f41250314945d165f26a9f709bcb31
+description: |
+  TEMPORARY Phase 0B validation artifact: Docker image does not exist; the
+  run must fail as a setup problem without leaking containers.
+prompt: |
+  Probe: unreachable image.
+agent:
+  type: command
+  argv:
+    - python3
+    - -c
+    - "print('probe: should never run')"
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+timeout_seconds: 120
+results_dir: results
+execution:
+  backend: docker
+  image: agentbench-missing-image:v0
+  network: disabled

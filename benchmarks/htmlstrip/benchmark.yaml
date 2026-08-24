@@ -1,0 +1,45 @@
+name: htmlstrip
+repository: fixture
+commit: f79aed2ab364c1a948e7d22a9a39be5e7f31dbe8
+description: |
+  Regex-based HTML-to-text converter mangles script/comment bodies and
+  double-unescapes entities; a correct dependency-free mini-parser is needed.
+prompt: |
+  `htmlstrip.to_text(html)` converts small HTML fragments to plain text.
+  The current implementation is a chain of regex substitutions and fails on:
+
+  1. `<script>` and `<style>` blocks whose CONTENT contains ">" (their body
+     must be removed entirely, not just the tags);
+  2. HTML comments containing tags or dashes (`<!-- <b>hi --</b> -->`);
+  3. entities: text like "&amp;lt;" currently becomes "<" (double
+     unescaping). Exactly ONE unescape pass is allowed - "&amp;lt;" must
+     stay "&lt;";
+  4. block-level tags (<p>, <div>, <br>, <li>) should separate words with
+     whitespace; currently adjacent blocks concatenate ("a<b" style).
+
+  Rewrite to_text() as a small character-scanning parser (no external
+  dependencies, no regex for tag matching) honoring all four rules.
+  The failing public tests pin the contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: parser-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: performance
+tags: [parser, algorithm]
+suites: [python-core, performance]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+results_dir: results

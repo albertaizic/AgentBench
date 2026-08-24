@@ -8,6 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from agentbench.stages import (
+    STAGE_AGENT,
+    STAGE_EVIDENCE,
+    STAGE_EVALUATION,
+)
+
 PASSED = "passed"
 EVALUATION_FAILED = "evaluation_failed"
 AGENT_FAILED = "agent_failed"
@@ -31,6 +37,8 @@ ALL_STATUSES = (
 class Classification:
     status: str
     reason: str | None
+    # WHERE it happened (see agentbench.stages); None for passed runs.
+    stage: str | None = None
 
 
 def classify_run(
@@ -53,17 +61,25 @@ def classify_run(
                                cleanly.
     """
     if agent_timed_out:
-        return Classification(AGENT_TIMEOUT, "agent process exceeded the timeout")
+        return Classification(
+            AGENT_TIMEOUT, "agent process exceeded the timeout", stage=STAGE_AGENT
+        )
     if protected_violation:
         return Classification(
-            PROTECTED_PATH_VIOLATION, "agent modified protected paths"
+            PROTECTED_PATH_VIOLATION,
+            "agent modified protected paths",
+            stage=STAGE_EVIDENCE,
         )
     if not has_evaluation_results:
-        return Classification(INVALID_RESULT, "no evaluation results were produced")
+        return Classification(
+            INVALID_RESULT, "no evaluation results were produced", stage=STAGE_EVALUATION
+        )
     if evaluations_passed:
         return Classification(PASSED, None)
     if agent_exit_code not in (0, None):
         return Classification(
-            AGENT_FAILED, f"agent exited with code {agent_exit_code} and evaluations failed"
+            AGENT_FAILED,
+            f"agent exited with code {agent_exit_code} and evaluations failed",
+            stage=STAGE_AGENT,
         )
-    return Classification(EVALUATION_FAILED, "one or more evaluations failed")
+    return Classification(EVALUATION_FAILED, "one or more evaluations failed", stage=STAGE_EVALUATION)
