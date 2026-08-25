@@ -1138,6 +1138,131 @@ def index_rows_safe(results_dir: str | Path, experiment_id: str) -> list[dict]:
 
 
 @app.command()
+def report(
+    experiment_id: str = typer.Argument(..., help="Experiment id shown after `agentbench experiment`."),
+    results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir"),
+    out: Path | None = typer.Option(None, "--out",
+                                     help="Directory for report files (default <results>/reports/<id>)."),
+    bundle: Path | None = typer.Option(None, "--bundle",
+                                       help="Also export a safe public study bundle into this directory."),
+    no_html: bool = typer.Option(False, "--no-html", help="Skip the HTML variant."),
+) -> None:
+    """Generate a static Markdown/HTML benchmark-study report from persisted evidence.
+
+    Mechanical and conservative: every number comes from the run database;
+    conclusions are limited to paired counts, intervals, and failure tallies.
+    """
+    from agentbench.experiments import ExperimentError, load_manifest
+    from agentbench.reporting import (
+        SecretLeakError,
+        build_study,
+        export_bundle,
+        render_html,
+        render_markdown,
+    )
+
+    manifest_path = Path(results_dir) / "experiments" / experiment_id / "experiment.json"
+    if not manifest_path.exists():
+        console.print(f"[red]Unknown experiment:[/] no manifest at {manifest_path}")
+        raise typer.Exit(code=EXIT_ERROR)
+    try:
+        manifest = load_manifest(manifest_path)
+    except ExperimentError as exc:
+        console.print(f"[red]Unreadable manifest:[/] {exc}")
+        raise typer.Exit(code=EXIT_ERROR)
+
+    study = build_study(manifest, index_rows_safe(results_dir, experiment_id))
+    target = out if out is not None else Path(results_dir) / "reports" / experiment_id
+    target.mkdir(parents=True, exist_ok=True)
+    markdown = render_markdown(study)
+    (target / "report.md").write_text(markdown, encoding="utf-8", newline="\n")
+    written = [target / "report.md"]
+    if not no_html:
+        html_path = target / "report.html"
+        html_path.write_text(render_html(study), encoding="utf-8", newline="\n")
+        written.append(html_path)
+
+    console.print(f"[bold]Report[/]: {', '.join(str(p) for p in written)}")
+    for agg in study.aggregates:
+        interval = agg.interval
+        bounds = f" [{interval[0]*100:.0f}%–{interval[1]*100:.0f}%]" if interval else ""
+        console.print(
+            f"  {agg.name}: {agg.passes}/{agg.runs} passed"
+            f" ({format_percent(agg.pass_rate)}{bounds})"
+        )
+
+    if bundle is not None:
+        try:
+            bundled = export_bundle(study, manifest, index_rows_safe(results_dir, experiment_id),
+                                    bundle, markdown=markdown,
+                                    html_text=None if no_html else render_html(study))
+        except SecretLeakError as exc:
+            console.print(f"[red]Bundle aborted — possible credential:[/] {exc}")
+            raise typer.Exit(code=EXIT_ERROR)
+        console.print(f"[bold]Bundle[/]: {bundle} ({len(bundled)} files, secret-scanned)")
+
+
+@app.command()
+def saturation(
+    results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir"),
+    min_runs: int = typer.Option(6, "--min-runs", min=1,
+                                 help="Minimum runs per benchmark before classifying."),
+    experiment_id: list[str] = typer.Option([], "--experiment-id",
+                                            help="Restrict evidence to these experiment ids."),
+    as_json: bool = typer.Option(False, "--json", help="Machine-readable output."),
+) -> None:
+    """Classify corpus difficulty/saturation from real run evidence.
+
+    Verdicts are mechanical: uncalibrated / discriminating / likely_saturated /
+    likely_too_hard, and require --min-runs evidence per benchmark.
+    """
+    import json
+
+    from agentbench.saturation import analyze
+
+    index = ResultIndex(default_db_path(Path(results_dir)))
+    ids = experiment_id or [None]
+    rows: list[dict] = []
+    for one in ids:
+        try:
+            rows.extend(index.query(experiment_id=one, limit=None))
+        except sqlite3.DatabaseError as exc:
+            console.print(f"[red]Results database unreadable:[/] {exc}")
+            raise typer.Exit(code=EXIT_ERROR)
+
+    verdicts = analyze(rows, min_runs=min_runs)
+    if as_json:
+        payload = [
+            {
+                "benchmark": v.benchmark,
+                "total_runs": v.total_runs,
+                "classification": v.classification,
+                "overall_pass_rate": v.overall_pass_rate,
+                "reason": v.reason,
+                "configs": [
+                    {
+                        "label": c.label, "runs": c.runs, "passes": c.passes,
+                        "pass_rate": c.pass_rate, "median_duration": c.median_duration,
+                        "median_tokens": c.median_tokens, "median_cost_usd": c.median_cost_usd,
+                    }
+                    for c in v.configs
+                ],
+            }
+            for v in verdicts
+        ]
+        console.print(json.dumps(payload, indent=2))
+        return
+
+    if not verdicts:
+        console.print("No indexed runs found — nothing to classify.")
+        return
+    console.print(f"[bold]Corpus difficulty[/] (min_runs={min_runs}, {len(rows)} indexed runs)")
+    for v in verdicts:
+        rate = format_percent(v.overall_pass_rate)
+        console.print(f"  {v.benchmark}: [bold]{v.classification}[/] ({rate}) — {v.reason}")
+
+
+@app.command()
 def reproduce(
     run_id: str = typer.Argument(..., help="A persisted run id."),
     results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir"),
@@ -1171,6 +1296,15 @@ def reproduce(
     config_snapshot: dict = original.get("config") or {}
     manifest_hint = Path(config_snapshot["_benchmark_manifest"])
     spec = load_benchmark(manifest_hint)
+    stored_agent = config_snapshot.get("agent")
+    if isinstance(stored_agent, dict):
+        # Experiments inject model/provider/reasoning per config; the bare
+        # manifest may leave them unset. Replay the original effective agent
+        # so the rerun measures the same configuration instead of whatever
+        # default the manifest (or CLI) would pick today.
+        from agentbench.models import AgentSpec
+
+        spec = spec.model_copy(update={"agent": AgentSpec.model_validate(stored_agent)})
     repository = resolve_repository_path(spec.repository, base_dir=manifest_hint.parent)
     execution_spec = execution_spec_from_provenance(original.get("execution") or {})
 

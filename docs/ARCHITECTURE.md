@@ -81,7 +81,10 @@ statistics speak.
    backend this is a plain subprocess; on Docker it is a labeled `--rm`
    container mounting only the workspace.
 4. `capture_diff` stages everything (`git add -A`) and diffs against the
-   pre-agent commit sha with textconv/ext-diff disabled.
+   pre-agent commit sha with textconv/ext-diff disabled. Conventional
+   tooling artifacts (virtualenvs, caches — listed in `diffs.TOOLING_DIRS`)
+   are pre-installed in the clone's `.git/info/exclude`, so agent-created
+   side effects like an auto-generated `.venv` never inflate diff metrics.
 5. Public evaluations run through the backend (same environment as the
    agent); hidden evaluations run on the host from their own directory with
    the workspace on `PYTHONPATH`.

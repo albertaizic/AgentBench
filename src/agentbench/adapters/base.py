@@ -31,6 +31,9 @@ class AgentUsage:
     output_tokens: int | None = None
     total_tokens: int | None = None
     cost_usd: float | None = None
+    # Where the cost figure came from (e.g. "reported", "estimated/ok") so
+    # cross-harness cost comparisons can be judged fairly. Null = unknown.
+    cost_provenance: str | None = None
     tool_calls: int | None = None
     num_turns: int | None = None
     session_id: str | None = None

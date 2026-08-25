@@ -34,6 +34,11 @@ class TestMcNemarExact:
         assert mcnemar_exact_p(1, 5) == pytest.approx(expected)
         assert mcnemar_exact_p(1, 5) < 0.3
 
+    def test_textbook_case_matches_closed_form(self):
+        # Classic table: 10 vs 1 discordant -> p = 24/2048 = 0.01171875
+        assert mcnemar_exact_p(10, 1) == pytest.approx(24 / 2048)
+        assert mcnemar_exact_p(1, 10) == pytest.approx(24 / 2048)
+
 
 class TestPairwiseStatistics:
     @staticmethod

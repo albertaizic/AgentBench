@@ -1,0 +1,47 @@
+{
+  "benchmark_identities": [
+    "jobqueue",
+    "ledgerpad",
+    "iniforge",
+    "csvroll",
+    "prefsfile",
+    "tokenbucket",
+    "vercomp",
+    "leasekit",
+    "statediag",
+    "bankday"
+  ],
+  "config_definitions": {
+    "claude-code": {
+      "agent": {
+        "argv": null,
+        "command": null,
+        "extra_args": [],
+        "model": "sonnet",
+        "prompt_mode": "stdin",
+        "provider": null,
+        "reasoning": null,
+        "type": "claude-code"
+      },
+      "execution": null
+    },
+    "hermes-openrouter": {
+      "agent": {
+        "argv": null,
+        "command": null,
+        "extra_args": [],
+        "model": "stealth/ox-alpha",
+        "prompt_mode": "stdin",
+        "provider": "openrouter",
+        "reasoning": "medium",
+        "type": "hermes"
+      },
+      "execution": null
+    }
+  },
+  "config_identities": {
+    "claude-code": "400f98ad94a8",
+    "hermes-openrouter": "c8396f624342"
+  },
+  "execution_backend": "host"
+}

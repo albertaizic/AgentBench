@@ -1,0 +1,38 @@
+name: leasekit
+repository: fixture
+commit: e78410ea25fc2cc110752a39ce649eb6bf015e82
+description: |
+  Bounded lease pool never reclaims expired leases on its own: capacity stays
+  consumed after TTL passes, and repeated failure-path usage exhausts the
+  pool even though every lease logically ended.
+prompt: |
+  Production hit PoolExhausted after a day of traffic even though every
+  caller used leases correctly — including ones whose work raised. The pool
+  must reclaim expired leases automatically (making their slots available
+  again, returning the same slot ids on reuse), so capacity reflects only
+  genuinely live leases at any moment. Keep the public release()/double-
+  release semantics unchanged; fix expiry accounting. The failing public
+  tests pin the visible contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: lifecycle-under-failure
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: resource-lifecycle
+tags: [cleanup, expiry, pools]
+suites: [python-core]
+language: python
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

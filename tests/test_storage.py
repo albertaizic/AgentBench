@@ -67,6 +67,51 @@ class TestIndexing:
         assert row["input_tokens"] is None
         assert row["cost_usd"] is None
 
+    def test_cost_provenance_round_trips(self, tmp_path):
+        index = ResultIndex(tmp_path / "db.sqlite")
+        payload = make_payload(usage={"cost_usd": 0.25, "cost_provenance": "reported"})
+        index.index_result(payload, result_dir=tmp_path)
+        row = index.query(limit=None)[0]
+        assert row["cost_provenance"] == "reported"
+
+    def test_v3_database_migrates_and_stays_queryable(self, tmp_path):
+        # A DB written before the cost-provenance column must keep working:
+        # opening it applies additive migrations and indexing still succeeds.
+        db = tmp_path / "db.sqlite"
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "CREATE TABLE runs (run_id TEXT PRIMARY KEY, schema_version INTEGER,"
+            " benchmark TEXT, repository TEXT, requested_commit TEXT,"
+            " resolved_commit TEXT, config_hash TEXT, agent TEXT, model TEXT,"
+            " status TEXT, failure_reason TEXT, trial INTEGER, started_at TEXT,"
+            " duration_seconds REAL, agent_exit_code INTEGER,"
+            " agent_timed_out INTEGER NOT NULL DEFAULT 0, files_changed INTEGER,"
+            " insertions INTEGER, deletions INTEGER, input_tokens INTEGER,"
+            " output_tokens INTEGER, total_tokens INTEGER, cost_usd REAL,"
+            " result_dir TEXT NOT NULL, created_at TEXT NOT NULL)"
+        )
+        conn.execute("PRAGMA user_version = 1")
+        conn.commit()
+        conn.close()
+        index = ResultIndex(db)  # triggers migration to current version
+        payload = make_payload(usage={"cost_usd": 0.25, "cost_provenance": "reported"})
+        index.index_result(payload, result_dir=tmp_path)
+        rows = index.query(limit=None)
+        assert len(rows) == 1
+        assert rows[0]["cost_usd"] == 0.25
+
+    def test_exact_zero_cost_is_normalized_to_unpriced(self, tmp_path):
+        # Providers report $0.00 for unpriced models; the derived index must
+        # not serve a fabricated free-inference figure to reports. (The
+        # primary result.json evidence is never rewritten.)
+        index = ResultIndex(tmp_path / "db.sqlite")
+        payload = make_payload(usage={"cost_usd": 0.0,
+                                      "cost_provenance": "provider_models_api/unknown"})
+        index.index_result(payload, result_dir=tmp_path)
+        row = index.query(limit=None)[0]
+        assert row["cost_usd"] is None
+        assert row["cost_provenance"] == "unpriced/provider_models_api/unknown"
+
 
 class TestQueries:
     seeded = [

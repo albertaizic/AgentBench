@@ -1,0 +1,37 @@
+name: cfgmerge
+repository: fixture
+commit: c8a48fa44d0d138ff8317daeed25d57d9514db4b
+description: |
+  Layered configuration merging replaces whole nested sections instead of
+  merging per key, so a narrow env override silently erases unrelated keys
+  from lower layers.
+prompt: |
+  Customers report that overriding one database setting through the
+  environment wipes out the rest of their configured database section. The
+  loader must implement true deep precedence: within nested dicts each layer
+  overrides only the keys it provides, with CLI beating env beating the file,
+  at every depth. Empty sections must not shadow anything. The failing public
+  tests pin the contract; keep their assertions unchanged and fix the loader.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: deep-precedence-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: configuration
+tags: [config, precedence, deep-merge]
+suites: [python-core]
+language: python
+difficulty: easy
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

@@ -1,0 +1,16 @@
+name: canary-hermes
+# Single-cell integration canary: proves the hermes adapter path
+# (invocation -> usage-file parsing -> evaluation) after any code change.
+benchmarks:
+  - ledgerpad
+configs:
+  - name: hermes-canary
+    agent:
+      type: hermes
+      model: stealth/ox-alpha
+      provider: openrouter
+      reasoning: medium
+repeat: 1
+execution:
+  backend: host
+results_dir: results

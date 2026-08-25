@@ -42,6 +42,10 @@ class ExperimentManifest(BaseModel):
     # Identity snapshots at planning time (content-derived, not display names).
     benchmark_identities: dict[str, str]  # name -> config hash of the loaded spec
     config_identities: dict[str, str]  # config name -> hash
+    # Full definition snapshot per config (agent incl. adapter/model/provider/
+    # reasoning, plus execution overrides). Reports render exact model/config
+    # identity from here without re-resolving YAML that may have changed since.
+    config_definitions: dict[str, dict] = Field(default_factory=dict)
     execution_backend: str | None = None
     # Concrete benchmark names resolved at creation time. Metadata selectors
     # (suite/tags/category) are resolved once; later corpus changes never
@@ -165,6 +169,13 @@ def new_manifest(
         repeat=spec.repeat,
         benchmark_identities={},
         config_identities={c.name: c.config_hash() for c in spec.configs},
+        config_definitions={
+            c.name: {
+                "agent": c.agent.model_dump(mode="json"),
+                "execution": c.execution.model_dump(mode="json") if c.execution else None,
+            }
+            for c in spec.configs
+        },
         execution_backend=(spec.execution.backend if spec.execution else None),
         resolved_benchmarks=list(benchmarks),
     )

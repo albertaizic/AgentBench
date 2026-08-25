@@ -42,9 +42,11 @@ def _reject_unsafe_relative(value: str, field: str) -> str:
 class AgentSpec(BaseModel):
     """How the coding agent should be executed.
 
-    Two adapter types exist:
+    Three adapter types exist:
 
     * ``claude-code`` – the Claude Code CLI (primary real adapter);
+    * ``hermes``      – the Hermes agent CLI, an OpenRouter-backed coding
+      agent with a real tool loop, run in one-shot mode;
     * ``command``     – a generic argv-based adapter so any non-interactive
       coding agent can be benchmarked without touching AgentBench core. The
       prompt is delivered on stdin by default, or via a ``{prompt}``
@@ -54,12 +56,16 @@ class AgentSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["claude-code", "command"]
+    type: Literal["claude-code", "command", "hermes"]
     # claude-code: optional override of the binary to execute (wrapper scripts).
     command: str | None = None
     extra_args: list[str] = Field(default_factory=list)
-    # Model selector honored by adapters that support it (claude-code).
+    # Model selector honored by adapters that support it (claude-code, hermes).
     model: str | None = None
+    # hermes adapter: inference provider and reasoning-effort overrides; both
+    # materially change behavior, so both are part of the config identity.
+    provider: str | None = None
+    reasoning: str | None = None
     # command adapter:
     argv: list[str] | None = None
     prompt_mode: Literal["stdin", "arg"] = "stdin"
@@ -239,6 +245,24 @@ def benchmark_hash_from_snapshot(snapshot: dict) -> str:
     normalized = {
         key: value for key, value in snapshot.items()
         if key not in _NON_IDENTITY_FIELDS
+    }
+    canonical = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+
+
+def benchmark_task_hash_from_snapshot(snapshot: dict) -> str:
+    """Task-only identity: everything except the agent block and metadata.
+
+    Experiment runs inject per-config agent overrides (model/provider/
+    reasoning) into the effective snapshot, while the manifest on disk may
+    leave ``agent`` unpinned. Task identity must be agent-independent so
+    reproducing an experiment-launched run compares like with like; the
+    effective agent configuration is replayed from the stored evidence
+    instead of being re-derived from the manifest.
+    """
+    normalized = {
+        key: value for key, value in snapshot.items()
+        if key not in _NON_IDENTITY_FIELDS and key != "agent"
     }
     canonical = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]

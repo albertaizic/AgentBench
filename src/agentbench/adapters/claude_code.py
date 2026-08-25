@@ -96,7 +96,19 @@ class ClaudeCodeAdapter(AgentAdapter):
         model = None
         model_usage = payload.get("modelUsage")
         if isinstance(model_usage, dict) and model_usage:
-            model = ", ".join(sorted(str(key) for key in model_usage))
+            # The envelope lists every model the CLI touched (a side query on
+            # a small model is normal). The requested/main model is the one
+            # that did the work: most expensive line item; deterministic
+            # name tie-break. Joining all keys would fabricate a composite
+            # model identity that matches no real configuration.
+            def _work(model_name: str) -> tuple[float, float, str]:
+                stats = model_usage[model_name] if isinstance(model_usage[model_name], dict) else {}
+                cost = _float_or_none(stats.get("costUSD")) or 0.0
+                tokens = (_int_or_none(stats.get("inputTokens")) or 0) + (
+                    _int_or_none(stats.get("outputTokens")) or 0)
+                return (cost, float(tokens), model_name)
+
+            model = max((str(key) for key in model_usage), key=_work)
 
         return AgentOutput(
             usage=AgentUsage(
@@ -104,6 +116,9 @@ class ClaudeCodeAdapter(AgentAdapter):
                 output_tokens=output_tokens,
                 total_tokens=total,
                 cost_usd=_float_or_none(payload.get("total_cost_usd")),
+                cost_provenance=(
+                    "reported" if _float_or_none(payload.get("total_cost_usd")) is not None else None
+                ),
                 # The CLI does not expose a reliable tool-call count in this
                 # envelope; num_turns is session metadata, reported as such.
                 tool_calls=None,

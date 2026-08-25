@@ -1,0 +1,38 @@
+name: statediag
+repository: fixture
+commit: 4134494764c50b082737a44ebf6e1f4e58aee0fa
+description: |
+  Pattern controllers hold a snapshot of the recognizer's alphabet taken at
+  registration; later reconfiguration silently diverges, so validation
+  decisions use symbols the machine no longer has.
+prompt: |
+  Our pattern-validation service misbehaves after reconfiguration. The test
+  suite pins the contract: when the recognizer's alphabet changes at runtime,
+  every controller backed by it must immediately validate against the NEW
+  alphabet (new symbols allowed only if a transition exists; removed symbols
+  must stop validating). Transitions added after registration must also be
+  honored. Diagnose the cross-module state handling and fix it minimally.
+  The failing public tests pin the contract; do not change their assertions.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: live-state-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: state-machines
+tags: [state, invalidation, multi-module]
+suites: [python-core]
+language: python
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

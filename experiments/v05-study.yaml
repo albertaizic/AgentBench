@@ -1,0 +1,30 @@
+name: v05-study
+# Matched two-harness comparison on 10 benchmarks spanning easy→hard.
+# Same host backend, same pinned fixture commits, identical evaluator sets;
+# only the coding agent differs between configs.
+benchmarks:
+  - jobqueue        # easy bugfix
+  - ledgerpad       # easy bugfix
+  - iniforge        # easy config parsing
+  - csvroll         # medium serialization
+  - prefsfile       # medium versioning
+  - tokenbucket     # medium state/rate logic
+  - vercomp         # medium compatibility
+  - leasekit        # medium resource lifecycle (new in v0.5)
+  - statediag       # medium cross-module state (new in v0.5)
+  - bankday         # hard transactional
+configs:
+  - name: claude-code
+    agent:
+      type: claude-code
+      model: sonnet
+  - name: hermes-openrouter
+    agent:
+      type: hermes
+      model: stealth/ox-alpha
+      provider: openrouter
+      reasoning: medium
+repeat: 3
+execution:
+  backend: host
+results_dir: results

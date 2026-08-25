@@ -666,6 +666,31 @@ def render_experiment_detail(store: DashboardStore, experiment_id: str) -> str |
         for r in rows if isinstance(r.get("duration_seconds"), (int, float))
     ]
 
+    # Evidence-based difficulty verdicts for this experiment's benchmarks.
+    from agentbench.saturation import analyze as analyze_saturation
+
+    def _pct(rate):
+        return f"{rate * 100:.0f}%" if isinstance(rate, (int, float)) else "—"
+
+    saturation_rows = [
+        [
+            esc(v.benchmark),
+            str(v.total_runs),
+            f'<span class="tag">{esc(v.classification)}</span>',
+            _pct(v.overall_pass_rate),
+            esc(v.reason),
+        ]
+        for v in analyze_saturation(rows)
+    ]
+    saturation_html = (
+        table(
+            ["BENCHMARK", "RUNS", "CLASSIFICATION", "PASS RATE", "EVIDENCE"],
+            saturation_rows,
+        )
+        if saturation_rows
+        else "<p>No runs indexed for this experiment yet.</p>"
+    )
+
     body = f"""
     <h2>Experiment {esc(manifest.get('name'))} <small>({esc(experiment_id)})</small></h2>
     {key_value_table([
@@ -681,6 +706,8 @@ def render_experiment_detail(store: DashboardStore, experiment_id: str) -> str |
     {table(['CONFIG', 'RUNS', 'PASS RATE [95% WILSON]', 'MEDIAN TIME [IQR]', 'MEDIAN TOKENS', 'AVG COST'], group_rows)}
     <h3>Pairwise configuration comparison</h3>
     {pairs_html}
+    <h3>Corpus difficulty (evidence-based)</h3>
+    {saturation_html}
     <h3>Failure taxonomy</h3>
     {table(['STATUS', 'COUNT'], [[esc(k), str(v)] for k, v in sorted(taxonomy.items())])}
     <h3>Duration distribution</h3>

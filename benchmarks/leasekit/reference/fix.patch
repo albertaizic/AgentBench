@@ -1,0 +1,42 @@
+--- a/leasekit/pool.py
++++ b/leasekit/pool.py
+@@ -23,7 +23,7 @@
+         if self.released:
+             raise RuntimeError(f"lease {self.lease_id} already released")
+         self.released = True
+-        self.pool._active.pop(self.lease_id, None)
++        self.pool._discard(self.lease_id)
+ 
+     def __enter__(self) -> "Lease":
+         return self
+@@ -43,15 +43,17 @@
+         self._ids = itertools.count(1)
+         self._active: dict[int, float] = {}
+ 
++    def _discard(self, lease_id: int) -> None:
++        self._active.pop(lease_id, None)
++
++    def _reap_expired(self) -> None:
++        now = time.monotonic()
++        for expired in [k for k, v in self._active.items() if v <= now]:
++            self._discard(expired)
++
+     def acquire(self) -> Lease:
++        self._reap_expired()
+         now = time.monotonic()
+-        # BUG: expiry is checked here, but expired entries are only removed
+-        # inside acquire's guard — callers that simply ask active_count()
+-        # between expiries see stale data, and any accounting path that skips
+-        # this purge leaks capacity permanently.
+-        expired = [k for k, v in self._active.items() if v <= now]
+-        for k in expired:
+-            pass  # dropped on the floor instead of being released properly
+         if len(self._active) >= self.size:
+             raise PoolExhausted("all leases are in use")
+         lease_id = next(self._ids)
+@@ -59,4 +61,5 @@
+         return Lease(self, lease_id, self._active[lease_id])
+ 
+     def active_count(self) -> int:
++        self._reap_expired()
+         return len(self._active)

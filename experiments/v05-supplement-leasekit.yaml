@@ -1,0 +1,19 @@
+name: v05-supplement-leasekit
+# Supplemental data — NOT part of the matched study of record.
+# In v05-study run 20260825T010230Z-4caf630c, all three leasekit/claude-code
+# cells crashed at ~8s with Claude "session limit" 429s (provider quota, not
+# agent capability; stdout envelope preserved in each run dir). These three
+# reruns measure the same cell under recovered quota. Reports pair only
+# within one experiment; this experiment exists so readers can see both
+# measurements side by side.
+benchmarks:
+  - leasekit
+configs:
+  - name: claude-code
+    agent:
+      type: claude-code
+      model: sonnet
+repeat: 3
+execution:
+  backend: host
+results_dir: results

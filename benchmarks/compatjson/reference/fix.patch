@@ -1,0 +1,44 @@
+--- a/ledger/codec.py
++++ b/ledger/codec.py
+@@ -45,18 +45,32 @@
+ 
+ 
+ def decode(payload: dict[str, Any]) -> list[Entry]:
+-    version = payload.get("version", 1)
+-    # BUG: no guard against versions we do not understand; a v3 archive from
+-    # the future silently decodes into nonsense instead of failing loudly.
++    version = int(payload.get("version", 1))
++    if version > SUPPORTED_VERSION:
++        raise UnsupportedVersion(
++            f"archive version {version} is newer than supported "
++            f"{SUPPORTED_VERSION}"
++        )
+     entries = []
+     for raw in payload.get("entries", []):
+-        amount = raw["amount"]
+-        if isinstance(amount, float):
+-            # BUG: v1 wrote amounts as JSON numbers; routing them through
+-            # binary float corrupts cents (0.1 + 0.2 problems).
+-            amount = Decimal(str(amount))
++        raw_amount = raw["amount"]
++        if isinstance(raw_amount, bool):
++            raise ValueError("bool is not an amount")
++        if isinstance(raw_amount, int):
++            amount = Decimal(raw_amount)
++        elif isinstance(raw_amount, float) and version == 1:
++            # v1 stored amounts as JSON numbers: integral values arrive as
++            # e.g. 5.0 and must normalize to an integer-scale Decimal.
++            amount = _decimal_from_v1_float(raw_amount)
+         else:
+-            amount = Decimal(str(amount))
++            amount = Decimal(str(raw_amount))
+         memo = raw.get("memo") or ""
+         entries.append(Entry(raw["account"], amount, memo))
+     return entries
++
++
++def _decimal_from_v1_float(value: float) -> Decimal:
++    amount = Decimal(repr(value))
++    if amount == amount.to_integral_value():
++        return amount.quantize(Decimal(1))
++    return amount

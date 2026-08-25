@@ -581,6 +581,7 @@ def _build_result(
                 "output_tokens": usage.output_tokens,
                 "total_tokens": usage.total_tokens,
                 "cost_usd": usage.cost_usd,
+                "cost_provenance": usage.cost_provenance,
                 "tool_calls": usage.tool_calls,
                 "num_turns": usage.num_turns,
                 "session_id": usage.session_id,

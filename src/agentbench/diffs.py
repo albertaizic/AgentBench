@@ -4,6 +4,14 @@ Staging everything first (``git add -A``) folds brand-new untracked files —
 exactly what agents tend to produce — into ``git diff HEAD``, which a plain
 ``git diff`` would silently miss. Staging alters only the index of our own
 throwaway workspace, never file contents.
+
+Conventional tooling artifacts (virtualenvs, caches) never enter the
+capture: they are installed into the workspace clone's ``.git/info/exclude``
+before staging, so an agent that auto-creates a virtualenv cannot fabricate
+diff statistics (a real Hermes run once recorded 488k "insertions" from an
+auto-created ``.venv``). Gitignore semantics apply at any depth; already
+tracked fixture files are unaffected, and agents can still force-add
+deliberately.
 """
 
 from __future__ import annotations
@@ -16,6 +24,38 @@ from agentbench.process import ProcessResult, resolve_executable, run_command
 # Absolute path: see workspace.GIT_EXECUTABLE for the reasoning.
 GIT_EXECUTABLE = resolve_executable("git")
 
+
+# Never treated as agent output wherever they appear in the workspace tree.
+TOOLING_DIRS: tuple[str, ...] = (
+    ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache",
+    ".ruff_cache", ".tox", "htmlcov", ".eggs", "node_modules",
+)
+TOOLING_FILES: tuple[str, ...] = (".coverage",)
+
+
+def _install_tooling_exclusions(workspace: Path) -> None:
+    """List TOOLING artifacts in the clone's local exclude file.
+
+    ``.git/info/exclude`` uses gitignore rules, so ``dir/`` matches at any
+    depth while touching neither tracked files nor the working tree.
+    """
+    lines = [
+        "# agentbench: conventional tooling artifacts are never agent output",
+        *(f"{name}/" for name in TOOLING_DIRS),
+        "*.egg-info/",
+        *TOOLING_FILES,
+        "",
+    ]
+    info_dir = workspace / ".git" / "info"
+    info_dir.mkdir(parents=True, exist_ok=True)
+    exclude = info_dir / "exclude"
+    existing = ""
+    try:
+        existing = exclude.read_text(encoding="utf-8")
+    except OSError:
+        pass
+    if "agentbench:" not in existing:
+        exclude.write_text(existing + "\n".join(lines), encoding="utf-8")
 
 @dataclass(frozen=True)
 class DiffStats:
@@ -80,10 +120,13 @@ def capture_diff(workspace: Path, *, base: str | None = None) -> DiffResult:
     """
     ref = base if base is not None else "HEAD"
     tamper_guards = ["--no-textconv", "--no-ext-diff", "--find-renames"]
-    _git(workspace, ["add", "-A", "--"])
+    _install_tooling_exclusions(workspace)
+    _git(workspace, ["add", "-A"])
     patch = _git(workspace, ["diff", *tamper_guards, ref]).stdout
     numstat = _git(workspace, ["diff", "--numstat", *tamper_guards, ref]).stdout
-    name_status = _git(workspace, ["diff", "--name-status", *tamper_guards, ref]).stdout
+    name_status = _git(
+        workspace, ["diff", "--name-status", *tamper_guards, ref]
+    ).stdout
     stats, changed_paths = _parse_numstat(numstat)
     binary_paths = [
         line.split("\t", 2)[2]

@@ -51,6 +51,29 @@ class TestCaptureDiff:
         assert "untracked.py" in result.patch
         assert "x = 1" in result.patch
         assert result.stats.files_changed == 1
+
+    def test_tooling_artifacts_are_excluded(self, local_repo):
+        # Agents sometimes auto-create virtualenvs/caches as side effects.
+        # They are never deliverables: counting them would fabricate diff
+        # statistics (a real hermes run once recorded 488k "insertions"
+        # from an auto-created .venv).
+        repo_path, _ = local_repo
+        venv_lib = repo_path / ".venv" / "Lib" / "site-packages"
+        venv_lib.mkdir(parents=True)
+        (venv_lib / "junk.py").write_text("x = 1\n", encoding="utf-8")
+        pycache = repo_path / "__pycache__"
+        pycache.mkdir()
+        (pycache / "app.cpython-312.pyc").write_bytes(b"\x00\x01")
+        nested = repo_path / "pkg" / ".pytest_cache"
+        nested.mkdir(parents=True)
+        (nested / "CACHEDIR.TAG").write_text("cache\n", encoding="utf-8")
+        (repo_path / "untracked.py").write_text("x = 1\n", encoding="utf-8")
+
+        result = capture_diff(repo_path)
+
+        assert result.stats.files_changed == 1
+        assert result.changed_paths == ("untracked.py",)
+        assert ".venv" not in result.patch
         assert result.stats.insertions == 1
 
     def test_binary_file_counted_but_not_line_counted(self, local_repo):

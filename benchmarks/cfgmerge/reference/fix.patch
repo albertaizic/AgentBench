@@ -1,0 +1,12 @@
+--- a/appconfig/settings.py
++++ b/appconfig/settings.py
+@@ -23,8 +23,5 @@
+     for layer in (file_layer, env_layer, cli_layer):
+         if not layer:
+             continue
+-        # BUG: plain dict.update clobbers whole sub-dicts, so a file section
+-        # like {"db": {"host": "a", "port": 1}} is wiped by an env override
+-        # {"db": {"port": 2}} that should only replace port.
+-        merged.update(layer)
++        merged = _deep_merge(merged, layer)
+     return merged

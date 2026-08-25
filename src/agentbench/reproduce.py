@@ -55,22 +55,24 @@ def preflight(original: dict, *, results_root: Path) -> ProvenanceComparison:
         comparison.blocked_reason = "benchmark name changed"
         return comparison
 
-    current_hash = spec.config_hash()
-    # Recompute the identity of the STORED snapshot under current rules:
-    # trusting the recorded digest would block reproduction whenever the
-    # hash inputs evolve (e.g. metadata leaving identity), even when the
-    # evaluation-relevant configuration is byte-identical.
-    from agentbench.models import benchmark_hash_from_snapshot
+    from agentbench.models import benchmark_task_hash_from_snapshot
 
-    stored_hash = benchmark_hash_from_snapshot(config)
-    comparison.add("benchmark identity (config hash)", current_hash == stored_hash,
+    # Task identity only: experiment runs inject per-config agent overrides
+    # into the stored snapshot, so comparing the agent block against the bare
+    # manifest would block every legitimate reproduction. The effective agent
+    # configuration is replayed from this stored evidence by the CLI instead.
+    current_hash = benchmark_task_hash_from_snapshot(spec.config_snapshot())
+    stored_hash = benchmark_task_hash_from_snapshot(config)
+    comparison.add("benchmark task identity", current_hash == stored_hash,
                    current_hash)
     if current_hash != stored_hash:
         comparison.blocked_reason = (
             "benchmark configuration changed since the original run "
-            "(config hash differs) — refusing to silently mix conditions"
+            "(task identity differs) — refusing to silently mix conditions"
         )
         return comparison
+    if isinstance(config.get("agent"), dict):
+        comparison.add("agent config replayed from original evidence", True)
 
     repository = resolve_repository_path(spec.repository, base_dir=Path(manifest_hint).parent)
     if not Path(repository).exists():

@@ -20,7 +20,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-SCHEMA_USER_VERSION = 3
+SCHEMA_USER_VERSION = 4
 # Seconds a write waits for a competing writer before failing. Parallel
 # experiment indexing makes brief contention normal, not exceptional.
 _SQLITE_BUSY_TIMEOUT = 10.0
@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS runs (
     output_tokens    INTEGER,
     total_tokens     INTEGER,
     cost_usd         REAL,
+    cost_provenance  TEXT,
     result_dir       TEXT NOT NULL,
     created_at       TEXT NOT NULL
 );
@@ -76,6 +77,10 @@ _MIGRATIONS = {
     3: [
         "ALTER TABLE runs ADD COLUMN failure_stage TEXT",
         "ALTER TABLE runs ADD COLUMN violation_count INTEGER",
+    ],
+    # v4 migration: where a cost figure came from (P16 metric provenance).
+    4: [
+        "ALTER TABLE runs ADD COLUMN cost_provenance TEXT",
     ],
 }
 
@@ -134,12 +139,13 @@ class ResultIndex:
                 trial, started_at, duration_seconds, agent_exit_code, agent_timed_out,
                 files_changed, insertions, deletions,
                 input_tokens, output_tokens, total_tokens, cost_usd,
+                cost_provenance,
                 execution_backend, image_id, image_digest,
                 experiment_id, config_name,
                 files_added, files_deleted,
                 failure_stage, violation_count,
                 result_dir, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(payload["run_id"]),
@@ -164,7 +170,7 @@ class ResultIndex:
                 _as_int((usage or {}).get("input_tokens")),
                 _as_int((usage or {}).get("output_tokens")),
                 _as_int((usage or {}).get("total_tokens")),
-                _as_float((usage or {}).get("cost_usd")),
+                *_normalized_cost(usage),
                 execution.get("backend"),
                 execution.get("image_id"),
                 digests[0] if digests else None,
@@ -242,6 +248,23 @@ class ResultIndex:
             "SELECT DISTINCT benchmark FROM runs ORDER BY benchmark"
         ).fetchall()
         return [row["benchmark"] for row in rows]
+
+
+def _normalized_cost(usage: dict | None) -> tuple:
+    """(cost_usd, cost_provenance) with exact-$0 prices treated as missing.
+
+    Providers report 0.0 with an estimated/unknown status for models that
+    have no pricing data; recording $0 would fabricate a cross-agent cost
+    result downstream. Primary ``result.json`` evidence is never touched —
+    this normalization happens only in the derived, rescannable index.
+    A genuinely billed run is never exactly zero.
+    """
+    cost = _as_float((usage or {}).get("cost_usd"))
+    provenance = (usage or {}).get("cost_provenance")
+    if cost == 0:
+        cost = None
+        provenance = f"unpriced/{provenance}" if provenance else "unpriced"
+    return cost, provenance
 
 
 def _as_int(value) -> int | None:

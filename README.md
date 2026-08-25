@@ -31,12 +31,17 @@ agentbench compare stockflow
 agentbench benchmark report                         # evidence-informed corpus view
 agentbench reproduce <run-id>
 agentbench export --experiment <experiment-id> --format csv
+agentbench report <experiment-id> --bundle ./study   # static report + public bundle
+agentbench saturation --min-runs 6                   # corpus difficulty verdicts
 agentbench dashboard          # http://127.0.0.1:8765
 ```
 
 Requires Python ≥ 3.12 and `git` on PATH. Docker Desktop enables the optional
-Docker backend. The Claude Code adapter requires the `claude` CLI (adapter
-flags verified against 2.1.239–2.1.241).
+Docker backend. Real-agent adapters: the Claude Code adapter requires the
+`claude` CLI (flags verified against 2.1.239–2.1.241); the Hermes adapter
+requires the `hermes` CLI (verified against 0.20.x) and runs OpenRouter-backed
+models through its real tool loop — file edits, command execution, iteration —
+never bare chat completions.
 
 ## Commands
 
@@ -49,6 +54,8 @@ flags verified against 2.1.239–2.1.241).
 | `compare <benchmark>` | aggregate by configuration; warns on commit drift |
 | `reproduce <run-id>` | re-run under recorded conditions; prints provenance diff |
 | `export [--experiment/--benchmark/--agent/--status] --format csv\|json` | flattened safe metrics |
+| `report <experiment-id> [--out dir] [--bundle dir] [--no-html]` | static study report from persisted evidence; bundle = secret-scanned public artifact |
+| `saturation [--min-runs N] [--experiment-id …] [--json]` | evidence-based per-benchmark classification: uncalibrated / discriminating / likely_saturated / likely_too_hard |
 | `benchmark list [--suite s]` / `benchmark validate <name>\|--all` | corpus discovery / validation sweep with rollup counts |
 | `benchmark report` | pass rates, medians and calibration flags per benchmark |
 | `dashboard [--port --host]` | read-only local web UI (paginated, filterable) |
@@ -91,8 +98,10 @@ commit: 020f9f1e2617…               # exact commit checked out (hex)
 prompt: |
   Task given verbatim to the agent.
 agent:
-  type: claude-code                 # claude-code or command
-  model: sonnet                     # optional, adapter-honored
+  type: claude-code                 # claude-code | hermes | command
+  model: sonnet                     # optional, adapter-honored (part of config identity)
+  # provider: openrouter            # hermes: inference provider override
+  # reasoning: medium               # hermes: reasoning-effort level
   # command: /opt/wrapper/claude    # binary override (claude-code)
   # extra_args: ["--verbose"]
 evaluations:                        # public: run in the workspace (same backend as agent)
@@ -128,7 +137,7 @@ See `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md`.
 
 ## Benchmark corpus
 
-`benchmarks/` ships sixteen deterministic Python benchmarks, each with public
+`benchmarks/` ships twenty deterministic Python benchmarks, each with public
 tests, hidden behavioral evaluators, protected paths, and — except where
 grading is patch-free — a reference solution patch. Every fixture repo is
 reproduced, at its exact commit sha, by its generator on any machine:
@@ -151,6 +160,10 @@ reproduced, at its exact commit sha, by its generator on any machine:
 | bankday | transactional | hard | validate-then-mutate transfers, atomic batches |
 | htmlstrip | parser/performance | hard | character-scanning HTML→text mini-parser |
 | testforge | test-writing | hard | write a suite that kills five seeded mutants |
+| statediag | state machines | medium | live alphabet view across recognizer/controller modules |
+| cfgmerge | configuration | easy | deep per-key precedence: CLI > env > file, any depth |
+| leasekit | resource lifecycle | medium | expired leases must stop consuming pool capacity |
+| compatjson | serialization compat | medium | exact legacy v1 amount recovery + future-version guard |
 
 Suites are declarative metadata on each manifest (`suites: [...]`) — e.g.
 `smoke` (ledgerpad, jobqueue), `bugfix`, `performance`, `python-core` —
@@ -172,6 +185,10 @@ regenerated with `python benchmarks/_make_reference.py`.
 * Claude Code runs headless with user tooling isolated: no inherited MCP
   servers (`--strict-mcp-config` + empty config), no user/local settings
   (`--setting-sources project`), structured JSON output for metrics;
+* Hermes runs one-shot (`-z`) under `--safe-mode` (no user config, memory,
+  rules injection, plugins, or MCP) and `--yolo` (unattended approvals), pinned
+  to the workspace via `--in`, with token/cost/model evidence from
+  `--usage-file` written outside the workspace so it never pollutes the diff;
 * diff captured against the pre-agent commit (agent commits included,
   textconv/ext-diff forgery disabled);
 * evaluations decide PASS/FAIL from exit codes only; hidden evaluators count;
@@ -212,9 +229,11 @@ hidden tests are hidden from the workspace, not cryptographically secret.
   + changed/added/deleted/renamed/binary file lists, requested & resolved
   commits, run id, timestamp, trial number, config hash, environment
   metadata (AgentBench / Python / platform / Git versions).
-- **Adapter-dependent** (Claude Code JSON output): input/output/total tokens,
-  cost USD, turns, session id, model. Adapters declare these via small
-  capability sets stored with each result.
+- **Adapter-dependent** (Claude Code JSON envelope; Hermes `--usage-file`):
+  input/output/total tokens, cost USD, turns/session id where the harness
+  exposes them, and the resolved model string. Adapters declare what they can
+  report via small capability sets stored with each result, so cost figures
+  are always attributable to their measuring harness.
 - **Unavailable stays null** — tool-call counts are currently null even for
   Claude; nothing is estimated. Raw agent output is preserved regardless.
 
@@ -247,6 +266,30 @@ always visible; nothing claims "better" on thin data.
 `agentbench reproduce <run-id>` reconstructs conditions from stored evidence,
 refuses to silently mix changed configurations, and prints which provenance
 fields match (identity, resolved commit, backend, image digest).
+
+## Example study: Claude Code vs Hermes (v0.5)
+
+`studies/v05-study/` contains a real, machine-generated comparison committed
+with the repository — 10 benchmarks × 2 agent configs × 3 trials = 60 runs,
+host backend, identical pinned fixture commits and evaluator sets:
+
+| config | passed | pass rate [Wilson 95%] | median time | median cost |
+|---|---|---|---|---|
+| claude-code (`claude` CLI, model `sonnet`) | 27/30 | 90% [74%–97%] | 32 s | $0.107 (reported) |
+| hermes-openrouter (`hermes` CLI, `stealth/ox-alpha` via OpenRouter, reasoning medium) | 28/30 | 93% [79%–98%] | 1:41 | unknown (unpriced model) |
+
+Paired over 30 matched cells: both pass 26 · claude only 1 · hermes only 2 ·
+both fail 1 · McNemar exact p = 1. Mechanical takeaways, no composite score:
+the harnesses are statistically indistinguishable overall on this corpus;
+`leasekit` (resource-lifecycle bug) is the one task that separates them, and
+it also fails the claude config in two supplemental experiments. Corpus
+difficulty analysis classifies 8 of these 10 benchmarks as likely saturated
+for current frontier agents and 2 as discriminating.
+Regenerate any part of it from persisted evidence with
+`agentbench report <experiment-id> [--bundle dir]`. Full numbers, per-cell
+outage markers, cost-provenance caveats and reproduction instructions are in
+[`studies/v05-study/report.md`](studies/v05-study/report.md). Results reflect
+this corpus only; they do not generalize beyond it.
 
 ## Baselines
 
@@ -283,8 +326,10 @@ frontend framework.
 - Docker backend requires a reachable daemon. Claude-in-Docker works via a
   locally-built image with credentials forwarded only through `pass_env`;
   building that image is documented but out of scope of the package.
-- Only Claude Code is a real validated adapter; `command` covers generic CLIs
-  with null usage metrics.
+- Only Claude Code and Hermes are real validated adapters; `command` covers
+  generic CLIs with null usage metrics. Hermes-in-Docker is not supported yet
+  (host backend only); the hermes binary and its OpenRouter credentials come
+  from the host environment.
 - Parallel experiments stop scheduling on Ctrl+C but in-flight cells run to
   their own timeouts; killing AgentBench outright can leak workspaces or
   containers until `agentbench cleanup` reclaims them by ownership label.

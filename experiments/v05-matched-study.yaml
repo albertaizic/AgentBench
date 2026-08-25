@@ -1,0 +1,20 @@
+name: v05-matched-study
+# Matched two-agent comparison over the python-core suite.
+# Both configs run on the same host backend, the same pinned fixture commits,
+# and the identical evaluator set per benchmark — only the harness differs.
+benchmarks:
+  suite: python-core
+configs:
+  - name: claude-code
+    agent:
+      type: claude-code
+      model: sonnet
+  - name: hermes-openrouter
+    agent:
+      type: hermes
+      provider: openrouter
+      reasoning: medium
+repeat: 3
+execution:
+  backend: host
+results_dir: results

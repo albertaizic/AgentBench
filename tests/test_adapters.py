@@ -149,6 +149,20 @@ class TestClaudeOutputParsing:
     def test_model_from_model_usage_block(self):
         assert self.parse(self.ENVELOPE).model == "claude-sonnet-5"
 
+    def test_main_model_wins_over_side_query_models(self):
+        # The CLI touches a small model for side queries; the recorded model
+        # identity must be the one that did the work, never a joined list.
+        envelope = json.dumps({
+            "usage": {"input_tokens": 10, "output_tokens": 1838},
+            "modelUsage": {
+                "claude-haiku-4-5-20251001": {"inputTokens": 1102, "outputTokens": 17,
+                                              "costUSD": 0.001187},
+                "claude-sonnet-5": {"inputTokens": 10, "outputTokens": 1838,
+                                    "costUSD": 0.1032082},
+            },
+        })
+        assert self.parse(envelope).model == "claude-sonnet-5"
+
     def test_stub_or_plain_text_output_yields_none(self):
         assert self.parse("agent done\n") is None
         assert self.parse("") is None

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentBench study — v05-study</title>
+<style>
+body{font:15px/1.55 system-ui,sans-serif;margin:2rem auto;max-width:60rem;
+padding:0 1rem;color:#1a1a2e;background:#fafafa}
+h1,h2{line-height:1.2} table{border-collapse:collapse;margin:.8rem 0;width:100%}
+th,td{border:1px solid #ccc;padding:.35rem .5rem;text-align:left;vertical-align:top}
+th{background:#eee} code{background:#f0f0f0;padding:.05rem .25rem}
+.tag{font-weight:600} .limit{color:#666}
+</style></head><body><h1>AgentBench study — v05-study</h1>
+<ul>
+<li>Experiment: <code>20260825T010230Z-4caf630c</code></li>
+<li>Generated: 2026-08-25T09:32:14+00:00 by AgentBench 0.5.0</li>
+<li>Created: 2026-08-25T01:02:30.155912+00:00</li>
+<li>Backend: host · repeats/cell: 3 · runs recorded: 60 of 60 planned cells</li>
+</ul>
+<h2>Configurations</h2>
+<table>
+<tr><th>config</th><th>identity</th><th>config hash</th></tr>
+<tr><td>claude-code</td><td>claude-code / sonnet</td><td>`400f98ad94a8`</td></tr>
+<tr><td>hermes-openrouter</td><td>hermes / stealth/ox-alpha / provider=openrouter / reasoning=medium</td><td>`c8396f624342`</td></tr>
+</table>
+<h2>Per-config aggregate</h2>
+<table>
+<tr><th>config</th><th>runs</th><th>passes</th><th>pass rate</th><th>Wilson 95%</th><th>median time</th><th>median tokens</th><th>median cost</th><th>cost evidence</th><th>failures</th></tr>
+<tr><td>claude-code</td><td>30</td><td>27</td><td>90%</td><td>[74%–97%]</td><td>32s</td><td>171.4k</td><td>$0.1073</td><td>reported, unpriced/reported</td><td>agent_failed:3, passed:27</td></tr>
+<tr><td>hermes-openrouter</td><td>30</td><td>28</td><td>93%</td><td>[79%–98%]</td><td>1:41</td><td>148.7k</td><td>—</td><td>unpriced/provider_models_api/unknown</td><td>evaluation_failed:2, passed:28</td></tr>
+</table>
+<h2>Paired outcomes (matched benchmark × trial cells)</h2>
+<ul>
+<li><strong>claude-code vs hermes-openrouter</strong> over 30 matched cells: both pass 26 · A only 1 · B only 2 · both fail 1 · McNemar exact p=1</li>
+</ul>
+<h2>Per-benchmark results</h2>
+<table>
+<tr><th>benchmark</th><th>claude-code</th><th>hermes-openrouter</th></tr>
+<tr><td>jobqueue</td><td>3/3 passed · 26s · 163.3k tok</td><td>3/3 passed · 1:34 · 129k tok</td></tr>
+<tr><td>ledgerpad</td><td>3/3 passed · 28s · 165.8k tok</td><td>3/3 passed · 1:36 · 145.1k tok</td></tr>
+<tr><td>iniforge</td><td>3/3 passed · 30s · 237.7k tok</td><td>3/3 passed · 2:15 · 217.8k tok</td></tr>
+<tr><td>csvroll</td><td>3/3 passed · 34s · 234.1k tok</td><td>3/3 passed · 1:40 · 148.6k tok</td></tr>
+<tr><td>prefsfile</td><td>3/3 passed · 38s · 167.6k tok</td><td>3/3 passed · 1:41 · 133.8k tok</td></tr>
+<tr><td>tokenbucket</td><td>3/3 passed · 30s · 165.9k tok</td><td>2/3 passed · 1:38 · 139k tok</td></tr>
+<tr><td>vercomp</td><td>3/3 passed · 46s · 234.1k tok</td><td>3/3 passed · 2:06 · 170.7k tok</td></tr>
+<tr><td>leasekit</td><td>0/3 passed † · 8s · 0 tok</td><td>2/3 passed · 1:41 · 155.5k tok</td></tr>
+<tr><td>statediag</td><td>3/3 passed · 40s · 247k tok</td><td>3/3 passed · 2:15 · 182.5k tok</td></tr>
+<tr><td>bankday</td><td>3/3 passed · 33s · 171k tok</td><td>3/3 passed · 2:04 · 157.2k tok</td></tr>
+</table>
+<p>\† At least one cell in this column failed without producing any</p>
+<p>tokens — the agent never reached a model (e.g. a provider-side abort</p>
+<p>or local CLI crash). Such cells measure infrastructure, not capability.</p>
+<h2>Corpus difficulty / saturation</h2>
+<table>
+<tr><th>benchmark</th><th>runs</th><th>classification</th><th>evidence</th></tr>
+<tr><td>bankday</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 runs)</td></tr>
+<tr><td>csvroll</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 runs)</td></tr>
+<tr><td>iniforge</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 runs)</td></tr>
+<tr><td>jobqueue</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 runs)</td></tr>
+<tr><td>leasekit</td><td>6</td><td>discriminating (33%)</td><td>config pass-rate spread 0%-67% &gt;= 25% across 6 runs</td></tr>
+<tr><td>ledgerpad</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 runs)</td></tr>
+<tr><td>prefsfile</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 runs)</td></tr>
+<tr><td>statediag</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 runs)</td></tr>
+<tr><td>tokenbucket</td><td>6</td><td>discriminating (83%)</td><td>config pass-rate spread 67%-100% &gt;= 25% across 6 runs</td></tr>
+<tr><td>vercomp</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 runs)</td></tr>
+</table>
+<h2>Known limitations</h2>
+<ul>
+<li>Results reflect this corpus and these configurations only; they do not generalize to other tasks or workloads.</li>
+<li>Each cell was run 3 time(s); small samples carry wide uncertainty (Wilson intervals are shown, not hidden).</li>
+<li>Cost/token figures come from each harness&#x27;s own reporting; where measurement sources differ materially, cross-agent cost comparisons are indicative only.</li>
+</ul>
+<h2>Reproduce</h2>
+<h1>re-run the identical matrix (same benchmarks/configs/commits)</h1>
+<p>agentbench show &lt;run-id&gt;            # inspect one cell&#x27;s evidence</p>
+<p>agentbench reproduce &lt;run-id&gt;       # preflight + rerun one cell</p><footer class="limit">Generated by AgentBench
+0.5.0 on 2026-08-25T09:32:14+00:00. Mechanical report: no editorial scoring.</footer>
+</body></html>

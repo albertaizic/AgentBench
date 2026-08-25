@@ -1,0 +1,39 @@
+name: compatjson
+repository: fixture
+commit: fca75897b1dd1ec0cdd618941284749c0456f1c8
+description: |
+  The v2 ledger decoder mangles amounts from legacy v1 archives (binary-float
+  noise leaks into Decimal balances) and happily decodes format versions it
+  was never taught to read.
+prompt: |
+  Migrating customers load old v1 ledger archives through the current codec,
+  and their balances come out wrong by tiny epsilon amounts — worse, archives
+  written by NEWER tools decode into garbage instead of failing loudly.
+  Fix decode(): legacy float amounts must recover the exact decimal value the
+  original writer intended, missing v1 fields must default cleanly, integer
+  amounts stay integral, and any version greater than the supported one must
+  raise UnsupportedVersion. The failing public tests pin the contract;
+  preserve their assertions and the public API.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: v1-archive-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+fail_on_protected_path_violation: true
+category: serialization
+tags: [compatibility, decimals, versioning]
+suites: [python-core]
+language: python
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 600
+results_dir: results

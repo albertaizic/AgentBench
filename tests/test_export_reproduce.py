@@ -126,6 +126,42 @@ class TestReproducePreflight:
         # both are legitimate refusals to mix conditions.
         assert comparison.blocked_reason is not None or comparison.checks
 
+    def test_experiment_injected_agent_does_not_block_reproduction(self, tmp_path):
+        # Regression: experiments inject model overrides into the effective
+        # snapshot while the manifest leaves agent.model null. Task identity
+        # is agent-independent, so this must preflight-clean.
+        from agentbench.loader import load_benchmark as real_load
+
+        manifest = tmp_path / "bench" / "benchmark.yaml"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        original = self._original(tmp_path)  # seeds a stub manifest first
+        manifest.write_text(
+            "name: demo\n"
+            "repository: fixture-repo\n"
+            "commit: " + "a" * 40 + "\n"
+            "prompt: fix it\n"
+            "agent:\n"
+            "  type: claude-code\n"
+            "evaluations:\n"
+            "  - name: t\n"
+            "    command: echo ok\n",
+            encoding="utf-8",
+        )
+
+        spec = real_load(manifest)
+        assert spec.agent.model is None  # bare manifest pins no model
+
+        snapshot = spec.config_snapshot()
+        snapshot["agent"] = dict(snapshot["agent"], model="sonnet")  # injected by experiment
+        original["config"].update(snapshot)
+
+        comparison = preflight(original, results_root=tmp_path)
+
+        by_name = {name: same for name, same, _ in comparison.checks}
+        assert by_name.get("benchmark task identity") is True, (
+            f"checks={comparison.checks} blocked={comparison.blocked_reason}"
+        )
+
 
 class TestConditionChecks:
     def test_reports_matching_and_differing_conditions(self):

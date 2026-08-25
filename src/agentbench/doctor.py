@@ -77,7 +77,18 @@ def run_checks(results_dir: Path) -> list[Check]:
     else:
         checks.append(Check("Claude Code", WARN, "claude CLI not found on PATH"))
 
-    for adapter_type in ("claude-code", "command"):
+    hermes_path = shutil.which("hermes")
+    if hermes_path:
+        version = _first_line(["hermes", "--version"])
+        checks.append(
+            Check("Hermes agent", OK, version or "installed (OpenRouter-backed coding agent)")
+        )
+    else:
+        checks.append(
+            Check("Hermes agent", WARN, "hermes CLI not found on PATH (host backend only)")
+        )
+
+    for adapter_type in ("claude-code", "command", "hermes"):
         try:
             get_adapter(adapter_type)
             checks.append(Check(f"Adapter '{adapter_type}'", OK, "available"))
