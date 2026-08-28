@@ -1,0 +1,42 @@
+diff --git a/cacheflow/service.py b/cacheflow/service.py
+index a4b2f1c..eea569c 100644
+--- a/cacheflow/service.py
++++ b/cacheflow/service.py
+@@ -48,11 +48,8 @@ class RecordService:
+ 
+     def create_record(self, *, record_id: str, owner: str, status: str, payload: str = "") -> Record:
+         record = self._repo.add(record_id=record_id, owner=owner, status=status, payload=payload)
+-        # BUG: mutations refresh only their primary-key entry. The derived
+-        # owner/status list views keyed by composite keys keep serving
+-        # pre-mutation membership.
+-        self._cache.invalidate(RECORD_DETAIL, record_id)
+         self._cache.set(RECORD_DETAIL, record_id, value=record)
++        self._invalidate_lists(owner=owner, status=status)
+         return record
+ 
+     def update_record(
+@@ -65,13 +62,21 @@ class RecordService:
+     ) -> Record:
+         before = self._repo.require(record_id)
+         updated = self._repo.update(record_id, owner=owner, status=status, payload=payload)
+-        # BUG: only the primary-key entry is invalidated here; owner/status
+-        # list caches keep serving stale snapshots.
+         self._cache.invalidate(RECORD_DETAIL, record_id)
++        self._invalidate_lists(owner=(before.owner, updated.owner), status=(before.status, updated.status))
+         return updated
+ 
+     def delete_record(self, record_id: str) -> Record:
+         record = self._repo.delete(record_id)
+-        # BUG: same as above - derived list views stay stale after deletion.
+         self._cache.invalidate(RECORD_DETAIL, record_id)
++        self._invalidate_lists(owner=record.owner, status=record.status)
+         return record
++
++    def _invalidate_lists(self, *, owner, status) -> None:
++        """Drop every derived view this mutation can have changed."""
++        owners = owner if isinstance(owner, tuple) else (owner,)
++        statuses = status if isinstance(status, tuple) else (status,)
++        for value in set(owners):
++            self._cache.invalidate(OWNER_LIST, value)
++        for value in set(statuses):
++            self._cache.invalidate(STATUS_LIST, value)

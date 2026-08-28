@@ -226,3 +226,9 @@ benchmarks/*/fixture/
 # Run evidence + derived SQLite index (JSON under results/ is machine-local;
 # history/comparison are rebuildable via rescan, exports via `agentbench export`)
 results/
+
+# TypeScript benchmark dependencies (installed per-fixture, never shipped)
+node_modules/
+
+# Session-local release-hardening bookkeeping
+.pre_v06_head.txt

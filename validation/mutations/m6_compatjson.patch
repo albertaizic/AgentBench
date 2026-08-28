@@ -1,0 +1,15 @@
+diff --git a/ledger/codec.py b/ledger/codec.py
+index 23ce6a9..e4fbf0f 100644
+--- a/ledger/codec.py
++++ b/ledger/codec.py
+@@ -45,7 +45,9 @@ def encode(entries: list[Entry]) -> dict[str, Any]:
+ 
+ 
+ def decode(payload: dict[str, Any]) -> list[Entry]:
+-    version = payload.get("version", 1)
++    version = int(payload.get("version", 1))
++    if version > SUPPORTED_VERSION:
++        raise UnsupportedVersion(f"archive version {version} too new")
+     # BUG: no guard against versions we do not understand; a v3 archive from
+     # the future silently decodes into nonsense instead of failing loudly.
+     entries = []

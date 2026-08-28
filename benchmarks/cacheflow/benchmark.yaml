@@ -1,0 +1,68 @@
+name: cacheflow
+repository: fixture
+commit: d9a8c6c7a289e825d8d805eb88ff7bd5fb44efa7
+description: |
+  Cache invalidation bug spanning a cached service layer and the repository
+  underneath it: every mutation refreshes only its primary-key detail entry,
+  while the derived owner-list and status-list views keyed by composite keys
+  keep serving pre-mutation snapshots. Updates that transfer ownership or
+  change status, deletions, and creates over previously materialized empty
+  views all leave stale membership behind until an unrelated process restart.
+prompt: |
+  Our record dashboard is backed by an in-memory repository with a caching
+  service layer in front of it. Users edit records constantly - reassign
+  owners, close/reopen tickets, delete junk, create new entries - and have
+  been reporting ghost rows: dashboards grouped by owner or by status keep
+  showing outdated membership even though opening the record itself shows
+  the fresh data. Only a full cache flush makes the views agree again.
+
+  After any mutation (create, update, delete), every cached view must
+  immediately reflect repository truth: per-owner lists, per-status lists,
+  and single-record lookups alike. At the same time the cache must keep
+  doing its job - untouched views stay cached, and repeated reads of an
+  unchanged view must not recomputed underlying queries each time. The
+  public tests pin this observable behavior.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: '"{python}" -m pytest -q'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.2, required: true}
+  edge_cases:    {weight: 0.2, required: false}
+  diagnostics:   {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: invalidation-contract
+      command: '"{python}" -m pytest -q'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: state-management
+tags: [cache, invalidation, composite-keys, staleness]
+suites: [long-horizon]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "After any mutation, owner-grouped and status-grouped views immediately reflect repository truth."}
+  - {id: req-2, text: "Single-record reads reflect updates and deletions as they already do today."}
+  - {id: req-3, text: "Caching still works: untouched views are served from cache without recomputation."}
+  - {id: req-4, text: "Deleting a record and re-creating it with the same id leaves all views consistent."}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["core_behavior"]}
+  - {requirement: req-3, scored_by: ["compatibility"]}
+  - {requirement: req-4, scored_by: ["edge_cases"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

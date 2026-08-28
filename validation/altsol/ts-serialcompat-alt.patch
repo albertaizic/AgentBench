@@ -1,0 +1,71 @@
+diff --git a/src/envelope.js b/src/envelope.js
+index 24014c4..fc20acb 100644
+--- a/src/envelope.js
++++ b/src/envelope.js
+@@ -13,8 +13,17 @@ export const VERSION = 2;
+  * @param {any} manifest
+  * @returns {string} canonical single-line JSON envelope
+  */
++class V2Envelope {
++  constructor(payload) {
++    this.payload = normalizeManifest(payload);
++  }
++  toJSON() {
++    return { format: FORMAT, version: VERSION, payload: this.payload };
++  }
++}
++
+ export function encode(manifest) {
+-  return JSON.stringify({ format: FORMAT, version: VERSION, payload: manifest });
++  return JSON.stringify(new V2Envelope(manifest));
+ }
+ 
+ /**
+@@ -28,6 +37,30 @@ export function encode(manifest) {
+  * @param {string} text
+  * @returns {any} canonical manifest
+  */
++const TONS_TO_KG = 1000;
++
++function legacyPayloadToCanonical(legacy) {
++  const cargo = Array.isArray(legacy.items)
++    ? legacy.items.map((item) => ({
++        sku: item.item_code,
++        qty: item.quantity,
++        weightKg: Number(item.mass_tons) * TONS_TO_KG,
++      }))
++    : [];
++  return normalizeManifest({
++    id: legacy.manifest_id,
++    vessel: legacy.vessel_name,
++    port: legacy.dock,
++    sealedAt: legacy.sealed_at,
++    cargo,
++  });
++}
++
++const VERSION_DECODERS = {
++  [[FORMAT, VERSION].join("@")]: (doc) => normalizeManifest(doc.payload),
++  "shipmanifest.v1": (doc) => legacyPayloadToCanonical(doc.manifest ?? {}),
++};
++
+ export function decode(text) {
+   let doc;
+   try {
+@@ -38,11 +71,13 @@ export function decode(text) {
+   if (doc === null || typeof doc !== "object") {
+     throw new TypeError("not a shipmanifest envelope");
+   }
+-  if (doc.format !== FORMAT && doc.format !== "shipmanifest.v1") {
++  const decodeVersion = VERSION_DECODERS[[doc.format, doc.version].join("@")]
++    ?? VERSION_DECODERS[doc.format];
++  if (decodeVersion === undefined && doc.format !== FORMAT) {
+     throw new TypeError(`not a shipmanifest envelope: format ${String(doc.format)}`);
+   }
+-  if (doc.version !== VERSION) {
++  if (decodeVersion === undefined) {
+     throw new Error(`unsupported envelope version: ${String(doc.version)}`);
+   }
+-  return doc.payload;
++  return decodeVersion(doc);
+ }

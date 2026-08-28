@@ -16,11 +16,14 @@ Keep every query in this module — nothing else in the codebase writes SQL.
 
 from __future__ import annotations
 
+import logging
+
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
-SCHEMA_USER_VERSION = 4
+SCHEMA_USER_VERSION = 5
 # Seconds a write waits for a competing writer before failing. Parallel
 # experiment indexing makes brief contention normal, not exceptional.
 _SQLITE_BUSY_TIMEOUT = 10.0
@@ -51,6 +54,7 @@ CREATE TABLE IF NOT EXISTS runs (
     total_tokens     INTEGER,
     cost_usd         REAL,
     cost_provenance  TEXT,
+    validity         TEXT,
     result_dir       TEXT NOT NULL,
     created_at       TEXT NOT NULL
 );
@@ -82,11 +86,18 @@ _MIGRATIONS = {
     4: [
         "ALTER TABLE runs ADD COLUMN cost_provenance TEXT",
     ],
+    # v5 migration: orthogonal evaluation-validity grade (P41).
+    5: [
+        "ALTER TABLE runs ADD COLUMN validity TEXT",
+    ],
 }
 
 
 def default_db_path(results_root: Path) -> Path:
     return Path(results_root) / ".agentbench" / "agentbench.db"
+
+
+logger = logging.getLogger(__name__)
 
 
 class ResultIndex:
@@ -139,13 +150,13 @@ class ResultIndex:
                 trial, started_at, duration_seconds, agent_exit_code, agent_timed_out,
                 files_changed, insertions, deletions,
                 input_tokens, output_tokens, total_tokens, cost_usd,
-                cost_provenance,
+                cost_provenance, validity,
                 execution_backend, image_id, image_digest,
                 experiment_id, config_name,
                 files_added, files_deleted,
                 failure_stage, violation_count,
                 result_dir, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(payload["run_id"]),
@@ -158,9 +169,9 @@ class ResultIndex:
                 str(agent.get("type", "")),
                 agent.get("model"),
                 str(overall.get("status", "")),
-                overall.get("failure_reason"),
+                _clean_text(overall.get("failure_reason")),
                 payload.get("trial"),
-                overall.get("started_at"),
+                _normalized_timestamp(overall.get("started_at")),
                 _as_float(overall.get("duration_seconds")),
                 _as_int(agent.get("exit_code")),
                 1 if agent.get("timed_out") else 0,
@@ -171,6 +182,7 @@ class ResultIndex:
                 _as_int((usage or {}).get("output_tokens")),
                 _as_int((usage or {}).get("total_tokens")),
                 *_normalized_cost(usage),
+                _normalized_validity(overall),
                 execution.get("backend"),
                 execution.get("image_id"),
                 digests[0] if digests else None,
@@ -201,8 +213,10 @@ class ResultIndex:
                     raise ValueError("not a run result")
                 self.index_result(payload, result_dir=result_file.parent)
                 indexed += 1
-            except (OSError, ValueError, sqlite3.Error, KeyError):
+            except (OSError, ValueError, sqlite3.Error, KeyError) as exc:
                 skipped += 1
+                logger.warning("skipped unreadable run artifact %s: %s",
+                               result_file, exc)
         return indexed, skipped
 
     # -- reading ------------------------------------------------------------
@@ -265,6 +279,35 @@ def _normalized_cost(usage: dict | None) -> tuple:
         cost = None
         provenance = f"unpriced/{provenance}" if provenance else "unpriced"
     return cost, provenance
+
+
+def _normalized_validity(overall: dict) -> str:
+    """Validity grade of a run; historical rows default to ``valid``."""
+    value = overall.get("validity")
+    return str(value) if isinstance(value, str) and value else "valid"
+
+
+def _normalized_timestamp(value) -> str | None:
+    """Timestamps are structured fields: anything unparseable is dropped.
+
+    Free-text smuggled into timestamp columns must never reach derived
+    surfaces (exports ship these columns verbatim).
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return value
+
+
+def _clean_text(value, *, limit: int = 500):
+    """Collapse whitespace in human-readable reason fields; keep it short."""
+    if not isinstance(value, str):
+        return value
+    collapsed = " ".join(value.split())
+    return collapsed[:limit]
 
 
 def _as_int(value) -> int | None:

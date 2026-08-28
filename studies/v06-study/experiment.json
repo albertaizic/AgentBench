@@ -1,0 +1,499 @@
+{
+  "schema_version": 1,
+  "experiment_id": "20260825T191521Z-4727103d",
+  "name": "v06-model-controlled",
+  "created_at": "2026-08-25T19:15:21.110253+00:00",
+  "results_dir": "results",
+  "planned_cells": 48,
+  "repeat": 3,
+  "interrupted": false,
+  "benchmark_identities": {
+    "tokenbucket": "5443f00d6b9a",
+    "leasekit": "2af2823c4e85",
+    "vercomp": "492ef0494018",
+    "statelock": "845960dbbaf4",
+    "pluginreg": "f21d33635f8d",
+    "cacheflow": "959f74bae1ec",
+    "txnrollback": "22fba357dde4",
+    "apimigrate": "a7adcb9ab605"
+  },
+  "config_identities": {
+    "hermes-ox-alpha": "c8396f624342",
+    "hermes-gpt-oss-20b": "1177c6595f0a"
+  },
+  "completed": [
+    {
+      "cell_key": "7489b6b25ad50835",
+      "benchmark": "tokenbucket",
+      "config": "hermes-ox-alpha",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T191521Z-ae29b7",
+      "run_dir": "results\\tokenbucket\\20260825T191521Z-ae29b7"
+    },
+    {
+      "cell_key": "0a15ac696ffe1ff2",
+      "benchmark": "tokenbucket",
+      "config": "hermes-ox-alpha",
+      "trial": 1,
+      "status": "protected_path_violation",
+      "run_id": "20260825T191521Z-f3737c",
+      "run_dir": "results\\tokenbucket\\20260825T191521Z-f3737c"
+    },
+    {
+      "cell_key": "64c02bcdc446d348",
+      "benchmark": "tokenbucket",
+      "config": "hermes-ox-alpha",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T191728Z-501a0c",
+      "run_dir": "results\\tokenbucket\\20260825T191728Z-501a0c"
+    },
+    {
+      "cell_key": "92d4c37ff56c8aa5",
+      "benchmark": "tokenbucket",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T191859Z-7d42a2",
+      "run_dir": "results\\tokenbucket\\20260825T191859Z-7d42a2"
+    },
+    {
+      "cell_key": "10e572108d94b9c9",
+      "benchmark": "tokenbucket",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T191833Z-5b39b8",
+      "run_dir": "results\\tokenbucket\\20260825T191833Z-5b39b8"
+    },
+    {
+      "cell_key": "33377305b8733958",
+      "benchmark": "tokenbucket",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T192101Z-73e11b",
+      "run_dir": "results\\tokenbucket\\20260825T192101Z-73e11b"
+    },
+    {
+      "cell_key": "bf164ff6f72e515e",
+      "benchmark": "leasekit",
+      "config": "hermes-ox-alpha",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260825T192303Z-47c483",
+      "run_dir": "results\\leasekit\\20260825T192303Z-47c483"
+    },
+    {
+      "cell_key": "623cf097238e106a",
+      "benchmark": "leasekit",
+      "config": "hermes-ox-alpha",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260825T192258Z-04038a",
+      "run_dir": "results\\leasekit\\20260825T192258Z-04038a"
+    },
+    {
+      "cell_key": "c263f9f9793e4013",
+      "benchmark": "leasekit",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260825T192654Z-acec36",
+      "run_dir": "results\\leasekit\\20260825T192654Z-acec36"
+    },
+    {
+      "cell_key": "c89da8223c6990fc",
+      "benchmark": "leasekit",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T192930Z-4469a8",
+      "run_dir": "results\\leasekit\\20260825T192930Z-4469a8"
+    },
+    {
+      "cell_key": "a68c3d8b6bce1f89",
+      "benchmark": "leasekit",
+      "config": "hermes-ox-alpha",
+      "trial": 3,
+      "status": "agent_timeout",
+      "run_id": "20260825T192536Z-5b792e",
+      "run_dir": "results\\leasekit\\20260825T192536Z-5b792e"
+    },
+    {
+      "cell_key": "b005900931794436",
+      "benchmark": "leasekit",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T193246Z-aa8779",
+      "run_dir": "results\\leasekit\\20260825T193246Z-aa8779"
+    },
+    {
+      "cell_key": "68f583602ef77012",
+      "benchmark": "vercomp",
+      "config": "hermes-ox-alpha",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T193541Z-e02ba8",
+      "run_dir": "results\\vercomp\\20260825T193541Z-e02ba8"
+    },
+    {
+      "cell_key": "7d5cbd98bff5f38a",
+      "benchmark": "vercomp",
+      "config": "hermes-ox-alpha",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T193715Z-5c0093",
+      "run_dir": "results\\vercomp\\20260825T193715Z-5c0093"
+    },
+    {
+      "cell_key": "fdc2e437a2a92278",
+      "benchmark": "vercomp",
+      "config": "hermes-ox-alpha",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T193608Z-4e5d22",
+      "run_dir": "results\\vercomp\\20260825T193608Z-4e5d22"
+    },
+    {
+      "cell_key": "fc927745b6261c23",
+      "benchmark": "vercomp",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T193852Z-7696ee",
+      "run_dir": "results\\vercomp\\20260825T193852Z-7696ee"
+    },
+    {
+      "cell_key": "1d09b618352a3c98",
+      "benchmark": "vercomp",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260825T193923Z-57e098",
+      "run_dir": "results\\vercomp\\20260825T193923Z-57e098"
+    },
+    {
+      "cell_key": "cdefd7997f68b279",
+      "benchmark": "vercomp",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260825T194124Z-c92ebc",
+      "run_dir": "results\\vercomp\\20260825T194124Z-c92ebc"
+    },
+    {
+      "cell_key": "cf69fe8562fbecc6",
+      "benchmark": "statelock",
+      "config": "hermes-ox-alpha",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T194352Z-9386e8",
+      "run_dir": "results\\statelock\\20260825T194352Z-9386e8"
+    },
+    {
+      "cell_key": "9e52f70d045bbd70",
+      "benchmark": "statelock",
+      "config": "hermes-ox-alpha",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T194431Z-dbebc7",
+      "run_dir": "results\\statelock\\20260825T194431Z-dbebc7"
+    },
+    {
+      "cell_key": "9d68b1f0bfd72bea",
+      "benchmark": "statelock",
+      "config": "hermes-ox-alpha",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T194655Z-815b2b",
+      "run_dir": "results\\statelock\\20260825T194655Z-815b2b"
+    },
+    {
+      "cell_key": "d62e5423e638edb0",
+      "benchmark": "statelock",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260825T195014Z-4792ed",
+      "run_dir": "results\\statelock\\20260825T195014Z-4792ed"
+    },
+    {
+      "cell_key": "093f76eabc7ee54b",
+      "benchmark": "statelock",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260825T194900Z-3915cd",
+      "run_dir": "results\\statelock\\20260825T194900Z-3915cd"
+    },
+    {
+      "cell_key": "72ee17f6775d8030",
+      "benchmark": "statelock",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260825T195308Z-18bda5",
+      "run_dir": "results\\statelock\\20260825T195308Z-18bda5"
+    },
+    {
+      "cell_key": "1af2443c23883d87",
+      "benchmark": "pluginreg",
+      "config": "hermes-ox-alpha",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T195449Z-3c0060",
+      "run_dir": "results\\pluginreg\\20260825T195449Z-3c0060"
+    },
+    {
+      "cell_key": "972c07912de0bc25",
+      "benchmark": "pluginreg",
+      "config": "hermes-ox-alpha",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T195426Z-123f07",
+      "run_dir": "results\\pluginreg\\20260825T195426Z-123f07"
+    },
+    {
+      "cell_key": "5736b270cb87adf6",
+      "benchmark": "pluginreg",
+      "config": "hermes-ox-alpha",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T195652Z-92bbbb",
+      "run_dir": "results\\pluginreg\\20260825T195652Z-92bbbb"
+    },
+    {
+      "cell_key": "079e6360f754f8a8",
+      "benchmark": "pluginreg",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T195946Z-a0be26",
+      "run_dir": "results\\pluginreg\\20260825T195946Z-a0be26"
+    },
+    {
+      "cell_key": "b53c27cb13e94fb4",
+      "benchmark": "pluginreg",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T195653Z-a3cde0",
+      "run_dir": "results\\pluginreg\\20260825T195653Z-a3cde0"
+    },
+    {
+      "cell_key": "323b63caaedec731",
+      "benchmark": "pluginreg",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T200050Z-3326a5",
+      "run_dir": "results\\pluginreg\\20260825T200050Z-3326a5"
+    },
+    {
+      "cell_key": "8d4692e6cc6d244e",
+      "benchmark": "cacheflow",
+      "config": "hermes-ox-alpha",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T200127Z-d8d443",
+      "run_dir": "results\\cacheflow\\20260825T200127Z-d8d443"
+    },
+    {
+      "cell_key": "28c4811f1987fb2a",
+      "benchmark": "cacheflow",
+      "config": "hermes-ox-alpha",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T200428Z-af2237",
+      "run_dir": "results\\cacheflow\\20260825T200428Z-af2237"
+    },
+    {
+      "cell_key": "329eb97be18f8ffa",
+      "benchmark": "cacheflow",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T201532Z-e73c77",
+      "run_dir": "results\\cacheflow\\20260825T201532Z-e73c77"
+    },
+    {
+      "cell_key": "d55be513c08c736d",
+      "benchmark": "cacheflow",
+      "config": "hermes-ox-alpha",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T201532Z-c4f12d",
+      "run_dir": "results\\cacheflow\\20260825T201532Z-c4f12d"
+    },
+    {
+      "cell_key": "35caebc1dd32c16a",
+      "benchmark": "cacheflow",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T201756Z-a6d886",
+      "run_dir": "results\\cacheflow\\20260825T201756Z-a6d886"
+    },
+    {
+      "cell_key": "d0049caa2926c91e",
+      "benchmark": "cacheflow",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 2,
+      "status": "protected_path_violation",
+      "run_id": "20260825T201749Z-832312",
+      "run_dir": "results\\cacheflow\\20260825T201749Z-832312"
+    },
+    {
+      "cell_key": "9f19fa481b7b8c6b",
+      "benchmark": "txnrollback",
+      "config": "hermes-ox-alpha",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T202145Z-1d9068",
+      "run_dir": "results\\txnrollback\\20260825T202145Z-1d9068"
+    },
+    {
+      "cell_key": "384c56c84dffd939",
+      "benchmark": "txnrollback",
+      "config": "hermes-ox-alpha",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T202154Z-5f31ad",
+      "run_dir": "results\\txnrollback\\20260825T202154Z-5f31ad"
+    },
+    {
+      "cell_key": "65dd15f8c9d19c2d",
+      "benchmark": "txnrollback",
+      "config": "hermes-ox-alpha",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T202326Z-8ca3a2",
+      "run_dir": "results\\txnrollback\\20260825T202326Z-8ca3a2"
+    },
+    {
+      "cell_key": "014754d0cdd5baeb",
+      "benchmark": "txnrollback",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T202349Z-3565a1",
+      "run_dir": "results\\txnrollback\\20260825T202349Z-3565a1"
+    },
+    {
+      "cell_key": "70038953afbfd3fb",
+      "benchmark": "txnrollback",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T202544Z-5015b4",
+      "run_dir": "results\\txnrollback\\20260825T202544Z-5015b4"
+    },
+    {
+      "cell_key": "1a37872ec2894134",
+      "benchmark": "txnrollback",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260825T202952Z-649fce",
+      "run_dir": "results\\txnrollback\\20260825T202952Z-649fce"
+    },
+    {
+      "cell_key": "c6e916d26fe38d65",
+      "benchmark": "apimigrate",
+      "config": "hermes-ox-alpha",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260825T203014Z-63aae4",
+      "run_dir": "results\\apimigrate\\20260825T203014Z-63aae4"
+    },
+    {
+      "cell_key": "c12be4fe5a7aec5d",
+      "benchmark": "apimigrate",
+      "config": "hermes-ox-alpha",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260825T203117Z-1f6d00",
+      "run_dir": "results\\apimigrate\\20260825T203117Z-1f6d00"
+    },
+    {
+      "cell_key": "a7951fe99163848a",
+      "benchmark": "apimigrate",
+      "config": "hermes-ox-alpha",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260825T203231Z-03450d",
+      "run_dir": "results\\apimigrate\\20260825T203231Z-03450d"
+    },
+    {
+      "cell_key": "ac81c3b8db0c9a7d",
+      "benchmark": "apimigrate",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260825T203304Z-644f18",
+      "run_dir": "results\\apimigrate\\20260825T203304Z-644f18"
+    },
+    {
+      "cell_key": "b3d2720ba23207ae",
+      "benchmark": "apimigrate",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260825T203645Z-987c2a",
+      "run_dir": "results\\apimigrate\\20260825T203645Z-987c2a"
+    },
+    {
+      "cell_key": "2cdf786e1b503d22",
+      "benchmark": "apimigrate",
+      "config": "hermes-gpt-oss-20b",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260825T203449Z-96e8b2",
+      "run_dir": "results\\apimigrate\\20260825T203449Z-96e8b2"
+    }
+  ],
+  "config_definitions": {
+    "hermes-ox-alpha": {
+      "agent": {
+        "type": "hermes",
+        "command": null,
+        "model": "stealth/ox-alpha",
+        "extra_args": [],
+        "provider": "openrouter",
+        "reasoning": "medium",
+        "argv": null,
+        "prompt_mode": "stdin"
+      },
+      "execution": null
+    },
+    "hermes-gpt-oss-20b": {
+      "agent": {
+        "type": "hermes",
+        "command": null,
+        "model": "openai/gpt-oss-20b",
+        "extra_args": [],
+        "provider": "openrouter",
+        "reasoning": "medium",
+        "argv": null,
+        "prompt_mode": "stdin"
+      },
+      "execution": null
+    }
+  },
+  "execution_backend": "host",
+  "comparison_mode": "model-controlled",
+  "comparison_warnings": [],
+  "resolved_benchmarks": [
+    "tokenbucket",
+    "leasekit",
+    "vercomp",
+    "statelock",
+    "pluginreg",
+    "cacheflow",
+    "txnrollback",
+    "apimigrate"
+  ]
+}

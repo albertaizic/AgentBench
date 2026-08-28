@@ -1,0 +1,73 @@
+name: ts-apirefact
+repository: fixture
+commit: 5663d011a6c532fb96032c13aed62dd740f230a8
+description: |
+  A monolithic API client class accretes every new operation inline; the task
+  is to migrate to a namespaced resource facade (client.users.*, client.projects.*)
+  while keeping the deprecated flat method surface working with deprecation
+  warnings, and migrating all internal callers off the legacy calls.
+prompt: |
+  Our `acmefetch` package (src/) is a single ApiClient class where every
+  operation inlines its own URL building and response unwrapping. The team
+  decided on a resource-oriented public API, but compatibility rules apply:
+
+  1. The package's main entry point must export `createClient({ transport })`
+     returning a client whose `client.users` and `client.projects` resources
+     expose the same operations as today (list/get/create plus
+     users.remove / projects.close), hitting exactly the same wire paths and
+     payloads as before.
+  2. The existing flat methods (`listUsers`, `getUser`, `createUser`,
+     `deleteUser`, `listProjects`, `getProject`, `createProject`,
+     `closeProject`) must keep working unchanged and return identical
+     results. Each flat call now also surfaces a deprecation warning through
+     Node's standard warning channel, tagged with code "ACME-DEP-API", at
+     most once per client instance per method name.
+  3. All in-repo callers (the scripts under tools/) must be migrated to the
+     new resources so normal usage never triggers the deprecation path.
+     Their observable output must stay byte-identical.
+
+  The failing tests in tests/ pin the contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: 'node run_tests.mjs'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.2, required: true}
+  edge_cases: {weight: 0.2, required: false}
+  diagnostics: {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: facade-contract
+      command: 'node "{hidden_dir}/facade_contract.test.mjs" "{workspace}"'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: api-change
+tags: [typescript, refactor, facade, deprecation]
+suites: [typescript]
+language: typescript
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+results_dir: results
+# ---- v0.6 metadata ----
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "createClient({ transport }) exposes client.users and client.projects resources performing the same operations over the same wire paths"}
+  - {id: req-2, text: "legacy flat methods keep returning identical results while emitting an ACME-DEP-API deprecation warning at most once per instance per method"}
+  - {id: req-3, text: "tools/ callers produce byte-identical output without triggering any deprecation warning"}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["compatibility"]}
+  - {requirement: req-3, scored_by: ["core_behavior", "diagnostics"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

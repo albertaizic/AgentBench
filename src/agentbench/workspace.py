@@ -69,6 +69,17 @@ def _cache_lock(mirror_dir: Path):
         time.sleep(0.1)
 
 
+def _release_cache_lock(mirror_dir: Path, handle: int) -> None:
+    """Close the lock fd AND unlink the file: os.close alone leaves the lock
+    path behind, forcing every later acquirer to wait out the full stale-lock
+    timeout before breaking it."""
+    os.close(handle)
+    try:
+        mirror_dir.with_suffix(".lock").unlink()
+    except OSError:
+        pass
+
+
 def _update_mirror(repository: str, mirror_dir: Path) -> None:
     handle = _cache_lock(mirror_dir)
     try:
@@ -76,7 +87,7 @@ def _update_mirror(repository: str, mirror_dir: Path) -> None:
         if result.exit_code != 0:
             raise WorkspaceError(f"cache refresh failed:\n{(result.stderr or result.stdout).strip()}")
     finally:
-        os.close(handle)
+        _release_cache_lock(mirror_dir, handle)
 
 
 def _mirror_for(repository: str, cache_root: Path) -> Path:
@@ -241,7 +252,7 @@ def create_workspace(
                     if update.exit_code != 0:
                         raise WorkspaceError(update.stderr or update.stdout)
             finally:
-                os.close(handle)
+                _release_cache_lock(mirror_dir, handle)
 
             # Clone locally from the mirror, then refresh refs from origin so
             # a stale mirror cannot hide newer commits.

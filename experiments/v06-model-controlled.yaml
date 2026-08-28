@@ -1,0 +1,31 @@
+name: v06-model-controlled
+# P30: model-controlled study — SAME harness (Hermes), only the model varies.
+# Constant: hermes version, prompt, tool policy (--safe-mode/--yolo), backend
+# (host), timeouts, reasoning level, benchmark commits.
+comparison_mode: model-controlled
+benchmarks:
+  - tokenbucket     # discriminating in v0.5 study
+  - leasekit        # discriminating in v0.5 study
+  - vercomp         # saturated-for-frontier but nontrivial for weaker models
+  - statelock       # long-horizon (new)
+  - pluginreg       # long-horizon (new)
+  - cacheflow       # long-horizon (new)
+  - txnrollback     # long-horizon (new)
+  - apimigrate      # long-horizon (new)
+configs:
+  - name: hermes-ox-alpha
+    agent:
+      type: hermes
+      model: stealth/ox-alpha
+      provider: openrouter
+      reasoning: medium
+  - name: hermes-gpt-oss-20b
+    agent:
+      type: hermes
+      model: openai/gpt-oss-20b
+      provider: openrouter
+      reasoning: medium
+repeat: 3
+execution:
+  backend: host
+results_dir: results

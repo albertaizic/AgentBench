@@ -1,0 +1,20 @@
+diff --git a/fuzzysearch/search.py b/fuzzysearch/search.py
+index d933c1a..ec23605 100644
+--- a/fuzzysearch/search.py
++++ b/fuzzysearch/search.py
+@@ -14,12 +14,12 @@ class ComparisonCounter:
+ 
+ 
+ def substring_count(haystack: str, needle: str,
+-                    counter: ComparisonCounter | None = None) -> int:
+-    """Count (possibly overlapping) occurrences of needle in haystack."""
++                    counter=None) -> int:
++    """Naive nested scan (mutation: keeps counter wired, blows budget)."""
+     counter = counter or ComparisonCounter()
++    count = 0
+     if not needle:
+         return 0
+-    count = 0
+     for start in range(len(haystack) - len(needle) + 1):
+         matched = True
+         for offset, expected in enumerate(needle):

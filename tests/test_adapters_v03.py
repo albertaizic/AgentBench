@@ -184,8 +184,11 @@ class TestStatistics:
         counts = pairwise_compare(a, b)
 
         # Trial 1: both pass. Trial 2: a failed while b passed → b_only.
-        assert counts == {"both_pass": 1, "a_only": 0, "b_only": 1,
-                          "both_fail": 0, "matched": 2}
+        # (pairwise_compare also returns a/b_passes_matched diagnostics.)
+        assert {k: counts[k] for k in ("both_pass", "a_only", "b_only",
+                                       "both_fail", "matched")} == {
+            "both_pass": 1, "a_only": 0, "b_only": 1,
+            "both_fail": 0, "matched": 2}
 
     def test_pairwise_no_overlap_returns_none(self):
         a = [{"benchmark": "b1", "trial": 1, "status": "passed"}]

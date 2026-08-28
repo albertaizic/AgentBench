@@ -23,6 +23,7 @@ from agentbench.backends.base import credential_env
 from agentbench.diffs import capture_diff
 from agentbench.evaluation import EvaluationOutcome
 from agentbench.models import BenchmarkSpec, ExecutionSpec
+from agentbench.envmeta import capture_environment
 from agentbench.results import SCHEMA_VERSION, RunArtifacts, RunResult, eval_artifact_stem, write_run
 from agentbench.runner import _new_run_id, eval_outcome_rows
 from agentbench.taxonomy import Classification
@@ -158,10 +159,9 @@ def run_reference_baseline(
             },
             execution={
                 **backend.provenance(),
-                "pass_env_evidence": credential_evidence,
                 "baseline_kind": "reference_patch",
             },
-            environment={},
+            environment=capture_environment(agent_cli_version=None),
             config={
                 **spec.config_snapshot(),
                 "_baseline": "reference_patch",

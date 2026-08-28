@@ -10,7 +10,7 @@ import hashlib
 import json
 import re
 from pathlib import PurePosixPath, PureWindowsPath
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -47,6 +47,8 @@ class AgentSpec(BaseModel):
     * ``claude-code`` – the Claude Code CLI (primary real adapter);
     * ``hermes``      – the Hermes agent CLI, an OpenRouter-backed coding
       agent with a real tool loop, run in one-shot mode;
+    * ``omp``         – the OMP (Oh My Pi) coding-agent CLI, run headless in
+      JSON-streaming print mode with user customization sources disabled;
     * ``command``     – a generic argv-based adapter so any non-interactive
       coding agent can be benchmarked without touching AgentBench core. The
       prompt is delivered on stdin by default, or via a ``{prompt}``
@@ -54,14 +56,14 @@ class AgentSpec(BaseModel):
       shell string.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
-    type: Literal["claude-code", "command", "hermes"]
-    # claude-code: optional override of the binary to execute (wrapper scripts).
+    type: Literal["claude-code", "command", "hermes", "omp"]
     command: str | None = None
-    extra_args: list[str] = Field(default_factory=list)
-    # Model selector honored by adapters that support it (claude-code, hermes).
+    # Model selector honored by adapters that support it (claude-code,
+    # hermes, omp). Part of the config identity.
     model: str | None = None
+    # Optional adapter-argument escape hatch; never displaces isolation
+    # guarantees and never carries the prompt.
+    extra_args: list[str] = Field(default_factory=list)
     # hermes adapter: inference provider and reasoning-effort overrides; both
     # materially change behavior, so both are part of the config identity.
     provider: str | None = None
@@ -82,14 +84,51 @@ class AgentSpec(BaseModel):
         return self
 
 
+class ScoringGroup(BaseModel):
+    """One independently meaningful dimension of task success (P9).
+
+    ``weight`` drives the partial score; ``required`` groups must fully pass
+    for the binary resolution to stay ``passed``. Weights across all declared
+    groups are normalized to 1.0.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    weight: float = Field(default=1.0, gt=0)
+    required: bool = False
+
+
+class Scorer(BaseModel):
+    """A deterministic, programmatic scorer (P8) — never an LLM judge.
+
+    ``binary`` scorers decide pass/fail by exit code, exactly like the
+    legacy ``evaluations`` list. ``fraction``/``continuous`` scorers
+    additionally parse a final-line ``agentbench-score: <0..1>`` marker;
+    ``count`` scorers report their raw number without contributing to the
+    partial score unless ``max_count`` normalizes them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    command: str = Field(min_length=1)
+    score_type: Literal["binary", "fraction", "count", "continuous"] = "binary"
+    groups: list[str] = Field(default_factory=lambda: ["default"])
+    required: bool = True
+    max_count: int | None = Field(default=None, gt=0)
+
+
 class Evaluation(BaseModel):
-    """A single shell command whose exit code decides pass/fail."""
+    """A single shell command whose exit code decides pass/fail.
+
+    Legacy v0.1 surface kept verbatim; internally equivalent to a binary
+    scorer in the ``default`` group.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
     command: str = Field(min_length=1)
-
 
 class HiddenEvaluationSpec(BaseModel):
     """Evaluators kept outside the agent-visible workspace.
@@ -141,6 +180,13 @@ class ExecutionSpec(BaseModel):
     memory: str | None = None  # e.g. "2g" → docker --memory
     cpus: float | None = Field(default=None, gt=0)  # docker --cpus
     pids_limit: int | None = Field(default=None, gt=0)  # docker --pids-limit
+    # Soft budget REQUESTS (P39). AgentBench always enforces wall time via
+    # ``timeout_seconds``. Token/cost budgets are recorded as requested and
+    # marked enforced=False unless the adapter declares a matching
+    # enforcement capability — a harness that cannot interrupt itself must
+    # not pretend it can.
+    token_budget: int | None = Field(default=None, gt=0)
+    cost_budget_usd: float | None = Field(default=None, ge=0)
     pass_env: list[str] = Field(default_factory=list)
     # Host-backend environment policy. "inherit" (default) passes the full
     # parent environment through — required when an agent authenticates from
@@ -229,11 +275,20 @@ class ReferenceSolution(BaseModel):
 _BENCHMARK_METADATA_FIELDS = (
     "description", "category", "tags", "suites", "language",
     "difficulty", "reference_solution", "expect_broken_baseline",
+    # v0.6 quality/provenance block: documentation ABOUT the task. Editing
+    # these records review work or provenance facts; none of them changes
+    # what is executed or how success is decided, so they stay OUT of
+    # benchmark identity (adding "needs-review" must never make old runs
+    # unreproducible). Grading-relevant blocks — scorers, scoring_groups,
+    # evaluations, protected_paths, prompt, commit — remain IN identity.
+    "prompt_requirements", "requirement_mappings", "source_kind",
+    "task_created_at", "task_public_since", "solution_public_since",
+    "contamination_risk", "canary", "human_time", "platforms",
+    "instruction_style", "quality_status",
 )
 
 _NON_IDENTITY_FIELDS = ("results_dir", "execution", "_benchmark_manifest",
-                        *_BENCHMARK_METADATA_FIELDS)
-
+                        "_baseline", *_BENCHMARK_METADATA_FIELDS)
 
 def benchmark_hash_from_snapshot(snapshot: dict) -> str:
     """Hash a stored config snapshot under the CURRENT identity rules.
@@ -298,6 +353,31 @@ class BenchmarkSpec(BaseModel):
     reference_solution: ReferenceSolution | None = None
     expect_broken_baseline: bool = False
 
+    # -- v0.6: scoring / partial credit (P8, P9) ---------------------------
+    # Declarative success dimensions. Absent => legacy behavior: every
+    # evaluation is a required binary scorer in the "default" group.
+    scoring_groups: dict[str, ScoringGroup] | None = None
+    scorers: list[Scorer] = Field(default_factory=list)
+
+    # -- v0.6: task provenance & quality metadata (P14, P16, P24, P25) -----
+    prompt_requirements: list[dict[str, str]] = Field(default_factory=list)
+    requirement_mappings: list[dict[str, Any]] = Field(default_factory=list)
+    source_kind: Literal[
+        "authored", "synthetic", "historical-public", "fresh-public", "cleanroom"
+    ] = "authored"
+    task_created_at: str | None = None
+    task_public_since: str | None = None
+    solution_public_since: str | None = None
+    contamination_risk: Literal["low", "medium", "high", "unknown"] = "unknown"
+    canary: dict[str, str] | None = None  # {string, placement} — never graded
+    human_time: dict[str, Any] | None = None
+    platforms: list[Literal["windows", "linux", "any"]] = Field(default_factory=lambda: ["any"])
+    instruction_style: Literal["explicit-task", "goal-oriented"] = "explicit-task"
+    stages: list[dict[str, Any]] = Field(default_factory=list)
+    quality_status: Literal[
+        "unreviewed", "provisional", "release-grade", "needs-review", "invalid"
+    ] = "unreviewed"
+
     @field_validator("results_dir")
     @classmethod
     def _results_dir_must_be_safe_relative(cls, value: str) -> str:
@@ -320,6 +400,15 @@ class BenchmarkSpec(BaseModel):
         names = [evaluation.name for evaluation in self.all_evaluations]
         if len(names) != len(set(names)):
             raise ValueError("evaluation names must be unique across public and hidden evaluations")
+        return self
+
+    @model_validator(mode="after")
+    def _scorer_ids_must_be_unique(self) -> "BenchmarkSpec":
+        # compute_scoring keys executed outcomes by scorer id; a duplicate
+        # would silently shadow the first result and fabricate credit.
+        ids = [scorer.id for scorer in self.scorers]
+        if len(ids) != len(set(ids)):
+            raise ValueError("scorer ids must be unique within scorers")
         return self
 
     @property
@@ -400,8 +489,100 @@ class BenchmarkSelection(BaseModel):
         return self
 
 
+# Model-identity fields a ``model-controlled`` experiment is allowed to vary.
+_MODEL_VARYING_FIELDS = ("model", "provider", "reasoning")
+
+
+def _validate_comparison_mode(spec: "ExperimentSpec") -> list[str]:
+    """Validate a declared comparison intent; return non-fatal warnings.
+
+    * model-controlled: every config must share the same harness (type,
+      command, extra_args, prompt_mode); only model/provider/reasoning may
+      differ, and at least one MUST differ — otherwise nothing is compared.
+    * scaffold-controlled: the author declares the model/provider side
+      equivalent; AgentBench cannot verify provider-side equivalence, so any
+      difference becomes a persisted warning instead of an error.
+    * system-comparison: warn when configs share both harness and model
+      (the experiment would compare nothing material).
+    """
+    import json as _json
+
+    warnings: list[str] = []
+    agents = [c.agent for c in spec.configs]
+    names = [c.name for c in spec.configs]
+
+    def same(field: str) -> bool:
+        values = {_json.dumps(getattr(a, field), sort_keys=True) for a in agents}
+        return len(values) == 1
+
+    def differing(field: str) -> list[str]:
+        return sorted({str(getattr(a, field)) for a in agents})
+
+    if spec.comparison_mode == "model-controlled":
+        for field in ("type", "command", "extra_args", "prompt_mode"):
+            if not same(field):
+                raise ValueError(
+                    f"model-controlled experiment requires identical agent "
+                    f"{field} across configs {names}; use "
+                    f"'system-comparison' if the harness itself differs"
+                )
+        # Execution-level differences (timeout, backend, network policy) do
+        # not change the model under test but CAN change outcomes; they are
+        # allowed as an explicit override and persisted as a warning so no
+        # reader mistakes the run for a pure model comparison.
+        executions = [_json.dumps(c.execution.model_dump(mode="json"), sort_keys=True)
+                      if c.execution else None for c in spec.configs]
+        if len(set(executions)) > 1:
+            warnings.append(
+                f"model-controlled experiment has differing execution "
+                f"settings across configs {names}; results may reflect "
+                f"execution policy, not model capability alone"
+            )
+    elif spec.comparison_mode == "scaffold-controlled":
+        for field in _MODEL_VARYING_FIELDS:
+            values = differing(field)
+            if len(values) > 1:
+                warnings.append(
+                    f"scaffold-controlled comparison: '{field}' differs across "
+                    f"configs ({' vs '.join(values)}); author declares the "
+                    f"model-side configuration equivalent — AgentBench cannot "
+                    f"verify provider-side equivalence"
+                )
+        if len(spec.configs) > 1 and same("type"):
+            warnings.append(
+                f"scaffold-controlled comparison uses a single harness type "
+                f"({agents[0].type!r}); no scaffold variation is present"
+            )
+    else:  # system-comparison
+        if len(spec.configs) > 1 and all(
+            same(field) for field in ("type", *_MODEL_VARYING_FIELDS)
+        ):
+            warnings.append(
+                "system-comparison configs share harness and model settings; "
+                "the experiment compares nothing material"
+            )
+    return warnings
+
+
+def validate_comparison_mode(spec: "ExperimentSpec") -> list[str]:
+    """Public alias of the load-time comparison-intent validator."""
+    return _validate_comparison_mode(spec)
+
+
 class ExperimentSpec(BaseModel):
-    """A benchmark × config × repeat matrix."""
+    """A benchmark × config × repeat matrix.
+
+    ``comparison_mode`` makes the intent of a comparison explicit so reports
+    never conflate model capability with harness/scaffold capability:
+
+    * ``system-comparison``   — complete systems differ (harness AND model);
+      differences in harness behavior are part of the compared system.
+    * ``model-controlled``    — same harness, tool policy, backend, timeout,
+      prompt and environment; ONLY model-related configuration differs.
+    * ``scaffold-controlled`` — scaffolds differ while the model/provider
+      configuration is declared equivalent; equivalence cannot be verified
+      automatically, so creation records an explicit warning instead.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -412,6 +593,11 @@ class ExperimentSpec(BaseModel):
     repeat: int = Field(default=1, ge=1, le=100)
     execution: ExecutionSpec | None = None  # experiment-level default
     results_dir: str = "results"
+    comparison_mode: Literal[
+        "system-comparison", "model-controlled", "scaffold-controlled"
+    ] = "system-comparison"
+    # Populated automatically at load time by _validate_comparison_mode.
+    comparison_warnings: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_shape(self) -> "ExperimentSpec":
@@ -423,6 +609,9 @@ class ExperimentSpec(BaseModel):
                 raise ValueError("experiment needs at least one benchmark")
             if len(set(self.benchmarks)) != len(self.benchmarks):
                 raise ValueError("experiment benchmark names must be unique")
+        # Comparison-intent consistency (P1). Hard errors fire here at YAML
+        # load time; returned warnings are persisted with the manifest.
+        self.comparison_warnings = _validate_comparison_mode(self)
         return self
 
     @property

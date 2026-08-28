@@ -60,6 +60,9 @@ never bare chat completions.
 | `benchmark report` | pass rates, medians and calibration flags per benchmark |
 | `dashboard [--port --host]` | read-only local web UI (paginated, filterable) |
 | `doctor` | environment readiness checks |
+| `study verify <study-dir>` | recompute a study report from evidence + verify SHA-256 bundle hashes |
+| `trajectory <run-id>` | normalized agent trajectory (tool calls, commands, usage) for one run |
+| `rescore <run-id>` | offline re-grading from stored evidence; writes an immutable scoring revision |
 | `cleanup workspaces\|containers [--apply]` | remove AgentBench-owned stale resources (dry-run default) |
 
 Exit codes: `run` 0 pass · 1 fail · 2 setup error · 130 interrupted;
@@ -98,7 +101,7 @@ commit: 020f9f1e2617…               # exact commit checked out (hex)
 prompt: |
   Task given verbatim to the agent.
 agent:
-  type: claude-code                 # claude-code | hermes | command
+  type: claude-code                 # claude-code | hermes | omp | command
   model: sonnet                     # optional, adapter-honored (part of config identity)
   # provider: openrouter            # hermes: inference provider override
   # reasoning: medium               # hermes: reasoning-effort level
@@ -137,39 +140,36 @@ See `docs/ARCHITECTURE.md` and `docs/THREAT_MODEL.md`.
 
 ## Benchmark corpus
 
-`benchmarks/` ships twenty deterministic Python benchmarks, each with public
-tests, hidden behavioral evaluators, protected paths, and — except where
-grading is patch-free — a reference solution patch. Every fixture repo is
-reproduced, at its exact commit sha, by its generator on any machine:
+`benchmarks/` ships 32 deterministic benchmarks — Python plus a TypeScript
+suite, spanning short bugfix tiers up to long-horizon multi-module work —
+each with public tests, hidden behavioral evaluators, protected paths,
+declared scoring groups (partial credit), provenance metadata and — except
+where grading is patch-free — a reference solution patch. Fixture repos are
+reproduced at their exact commit sha by their generators on any machine.
 
-| Benchmark | Category | Difficulty | Task shape |
+Highlights beyond the sixteen-file core bugfix/performance tiers:
+
+| Benchmark | Tier | Language | Task shape |
 | --- | --- | --- | --- |
-| stockflow | bugfix | medium | stale cache + duplicate handling + input validation across files |
-| ledgerpad | bugfix | easy | missing boundary/currency validation at an entry point |
-| configschema | api-change | medium | propagate strict mode through every caller |
-| jobqueue | bugfix | easy | numeric priority ordering + stable tie-breaks |
-| prefsfile | bugfix | medium | schema versioning + legacy coercion for settings files |
-| fuzzysearch | performance | hard | replace quadratic scan under a comparison budget |
-| iniforge | config parsing | easy | last-duplicate-wins keys + strict boolean coercion |
-| csvroll | serialization | medium | quoted CSV round-trip + header-less v1 migration |
-| tokenbucket | state/rate logic | medium | no negative balances, fractional refill credit |
-| logroll | resource cleanup | easy | idempotent logger handlers, closed old streams |
-| vercomp | compatibility | medium | numeric version parts + pre-release ordering |
-| retryloop | error handling | medium | retry only retryable errors; re-raise the last |
-| typegate | api-change | medium | strict-mode flag propagated through all consumers |
-| bankday | transactional | hard | validate-then-mutate transfers, atomic batches |
-| htmlstrip | parser/performance | hard | character-scanning HTML→text mini-parser |
-| testforge | test-writing | hard | write a suite that kills five seeded mutants |
-| statediag | state machines | medium | live alphabet view across recognizer/controller modules |
-| cfgmerge | configuration | easy | deep per-key precedence: CLI > env > file, any depth |
-| leasekit | resource lifecycle | medium | expired leases must stop consuming pool capacity |
-| compatjson | serialization compat | medium | exact legacy v1 amount recovery + future-version guard |
+| schemamigrate | long-horizon | python | config schema migration: parser + model + serializer must stay version-faithful |
+| cacheflow | long-horizon | python | composite-key cache invalidation across service + repository layers |
+| apimigrate | long-horizon | python | API split with deprecated shim; three callers + facade migration |
+| txnrollback | long-horizon | python | two-phase batch commit with compensating audit entries |
+| pluginreg | long-horizon | python | plugin registry: order independence + normalized duplicate detection |
+| statelock | long-horizon | python | guarded state-machine retries with journal-evidence guards |
+| ts-apirefact / ts-asyncbug / ts-serialcompat / ts-testwrite | typescript | js/ts | facade migration, async drain bug, envelope compat, mutation-scored test writing |
+| goal-dedupe | goal-oriented | python | "eliminate redundant processing" — no function names given |
+| cleanroom-ratelimit | cleanroom | python | implement token bucket from an executable spec only |
 
-Suites are declarative metadata on each manifest (`suites: [...]`) — e.g.
-`smoke` (ledgerpad, jobqueue), `bugfix`, `performance`, `python-core` —
-usable by `benchmark list --suite` and experiment benchmark selectors.
-Difficulty labels are provisional metadata; `benchmark report` adds
-evidence-based calibration flags once enough runs accumulate.
+Suites are declarative metadata on each manifest (`suites: [...]`) —
+`python-core`, `long-horizon`, `typescript`, `goal-oriented-provisional`,
+`cleanroom-experimental`, `smoke`, ... — usable by `benchmark list --suite`
+and experiment selectors. Difficulty labels are authored metadata;
+`benchmark report` adds evidence-based calibration once runs accumulate,
+and `benchmark audit` grades oracle/nop stability, requirement mapping and
+provenance into release-grade/provisional/needs-review/invalid statuses.
+See [docs/BENCHMARK_QUALITY.md](docs/BENCHMARK_QUALITY.md) and
+[docs/BENCHMARK_AUTHORING.md](docs/BENCHMARK_AUTHORING.md).
 
 Maintain fixtures by editing the generator's embedded contents, re-running
 it (deterministic shas), and re-pinning the commit. Reference patches are
@@ -247,8 +247,9 @@ never silently alter an existing experiment. `--dry-run` prints benchmarks,
 configs, resource limits, total cells and maximum parallelism without touching
 the filesystem. `--jobs N` (default 1) runs up to N cells concurrently — each
 cell keeps an independent workspace/container/process state; Ctrl+C stops
-scheduling new cells while in-flight ones finish so their evidence stays
-complete; `--max-runs K` is a hard stop that remains resumable. Docker
+scheduling new cells; in-flight cells are interrupted and persisted as failed
+runs, so evidence stays complete and the experiment remains resumable;
+`--max-runs K` is a hard stop that remains resumable. Docker
 configs without memory/cpus/pids limits are clamped to 4-way parallelism with
 an explicit notice.
 
@@ -291,6 +292,30 @@ outage markers, cost-provenance caveats and reproduction instructions are in
 [`studies/v05-study/report.md`](studies/v05-study/report.md). Results reflect
 this corpus only; they do not generalize beyond it.
 
+## Example study: OMP vs GPT-OSS (v0.6)
+
+`studies/v06-study/` is the v0.6 study of record: a model-controlled
+comparison of two OpenRouter-backed harness configurations over the full
+32-benchmark corpus subset — 24 matched cells per config, machine-generated
+report, paired outcomes and McNemar statistics, plus a secondary Claude Code
+vs OMP system comparison. Verify it without trusting the prose:
+
+```bash
+agentbench study verify studies/v06-study
+```
+
+### Dashboard screenshots
+
+![AgentBench main dashboard showing experiment overview with 32 benchmarks](docs/assets/screenshots/dashboard-main.png)
+
+![System comparison study: Claude Code vs OMP over 18 matched cells](docs/assets/screenshots/system-comparison-study.png)
+
+![Model-controlled study: Hermes ox-alpha vs gpt-oss-20b over 24 matched cells](docs/assets/screenshots/model-controlled-study.png)
+
+![Benchmark audit view with per-benchmark pass rates and validation status](docs/assets/screenshots/benchmark-audit.png)
+
+![Run trajectory detail showing agent evidence, evaluations, diff stats, and timings](docs/assets/screenshots/run-trajectory.png)
+
 ## Baselines
 
 `agentbench run <benchmark.yaml> --baseline reference` applies the benchmark's
@@ -326,10 +351,11 @@ frontend framework.
 - Docker backend requires a reachable daemon. Claude-in-Docker works via a
   locally-built image with credentials forwarded only through `pass_env`;
   building that image is documented but out of scope of the package.
-- Only Claude Code and Hermes are real validated adapters; `command` covers
-  generic CLIs with null usage metrics. Hermes-in-Docker is not supported yet
-  (host backend only); the hermes binary and its OpenRouter credentials come
-  from the host environment.
-- Parallel experiments stop scheduling on Ctrl+C but in-flight cells run to
-  their own timeouts; killing AgentBench outright can leak workspaces or
+- Parallel experiments stop scheduling on Ctrl+C (exit code 130); in-flight
+  cells are interrupted and recorded as failed runs. Killing AgentBench
+  outright can leak workspaces or
   containers until `agentbench cleanup` reclaims them by ownership label.
+- Three real validated adapters; `command` covers generic CLIs with null
+  usage metrics. Claude Code (2.1.x), Hermes (0.20.x, OpenRouter-backed) and
+  OMP (18.x, JSON-streaming print mode) all run real tool loops. Hermes and
+  OMP run on the host backend only.

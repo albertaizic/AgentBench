@@ -1,0 +1,27 @@
+name: v06-system-comparison
+# P31: system-comparison subset — three complete coding systems on the same
+# benchmark set. Differences between harnesses are PART of the compared
+# system; conclusions must not be read as model-only comparisons.
+comparison_mode: system-comparison
+benchmarks:
+  - tokenbucket
+  - leasekit
+  - statelock
+  - pluginreg
+  - cacheflow
+  - apimigrate
+configs:
+  - name: claude-code-sonnet
+    agent:
+      type: claude-code
+      model: sonnet
+  - name: omp-ox-alpha
+    agent:
+      type: omp
+      model: stealth/ox-alpha
+      provider: openrouter
+      reasoning: medium
+repeat: 3
+execution:
+  backend: host
+results_dir: results

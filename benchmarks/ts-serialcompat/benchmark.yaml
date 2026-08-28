@@ -1,0 +1,76 @@
+name: ts-serialcompat
+repository: fixture
+commit: 727fea2663726d226ae60763f2873842a1337a77
+description: |
+  After the shipmanifest emitter upgrade the reader only accepts v2 envelopes:
+  archived legacy v1 lines fail with "unsupported envelope version", and the
+  writer serializes un-normalized input so legacy-shaped manifests silently
+  lose fields. Restore a tolerant reader (both versions, ton-to-kg conversion)
+  while keeping the writer strictly canonical.
+prompt: |
+  Our shipmanifest package (src/) stores cargo manifests as newline-delimited
+  JSON envelopes. Since the v2 emitter upgrade two regressions bite us:
+
+  - Archives written before the upgrade use the "shipmanifest.v1" format
+  (snake_case payload, weights as metric tons under items[].mass_tons).
+  Decoding any such envelope currently throws "unsupported envelope version",
+  so whole archives fail to load.
+  - The writer no longer normalizes its input: manifests constructed by older
+  integrations with snake_case field names go into the envelope verbatim, and
+  reading them back loses data silently.
+
+  The contract pinned by tests/:
+  - decode() accepts both v2 envelopes and legacy v1 envelopes, returning the
+  same canonical manifest shape for each; v1 weights convert exactly from
+  metric tons to kilograms.
+  - Envelopes that are neither our format nor a known version keep failing
+  with clear errors ("not a shipmanifest envelope" / "unsupported envelope
+  version").
+  - encode() emits byte-identical canonical v2 envelopes regardless of which
+  naming convention the caller used, and rejects structurally invalid input.
+  - Archives continue to load tolerantly (bad lines are reported, good lines
+  still load) and strictly on demand.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: 'node run_tests.mjs'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.25, required: true}
+  edge_cases: {weight: 0.15, required: false}
+  diagnostics: {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: envelope-contract
+      command: 'node "{hidden_dir}/envelope_contract.test.mjs" "{workspace}"'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: compatibility
+tags: [typescript, serialization, versioning, migration]
+suites: [typescript]
+language: typescript
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+results_dir: results
+# ---- v0.6 metadata ----
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "decode() loads both v2 and legacy v1 envelopes into one canonical manifest shape with exact ton-to-kilogram conversion"}
+  - {id: req-2, text: "encode() emits byte-identical canonical v2 envelopes for either naming convention and rejects invalid input"}
+  - {id: req-3, text: "archives keep their tolerant/strict loading semantics across mixed-version content"}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["compatibility"]}
+  - {requirement: req-2, scored_by: ["core_behavior"]}
+  - {requirement: req-3, scored_by: ["core_behavior", "edge_cases"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

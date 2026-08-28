@@ -1,0 +1,72 @@
+diff --git a/txnrollback/transactions.py b/txnrollback/transactions.py
+index bf028a3..71ceb39 100644
+--- a/txnrollback/transactions.py
++++ b/txnrollback/transactions.py
+@@ -47,16 +47,61 @@ class TransactionBatch:
+         return len(self._ops)
+ 
+     def commit(self) -> Receipt:
+-        applied: list = []
++        if self.committed:
++            raise BatchError("batch already committed")
++        # Phase 1: validate the entire batch against projected running
++        # balances BEFORE any ledger mutation, audit write, or enqueue.
++        # An abort is always explained by a compensating reversal entry.
++        try:
++            self._validate_all()
++        except BatchError as exc:
++            self._audit.record_reversal(
++                self.batch_id, f"aborted before apply: {exc}"
++            )
++            raise
++        # Phase 2: apply; per-op failures are unreachable after validation,
++        # but any unexpected abort still gets a compensating audit entry.
++        applied_count = 0
+         try:
+             for op in self._ops:
+-                entry = self._ledger.apply(op)
++                self._ledger.apply(op)
+                 self._audit.record_post(self.batch_id, op.describe())
+                 self._outbox.enqueue(self.batch_id, op.describe())
+-                applied.append(entry)
++                applied_count += 1
+         except LedgerError as exc:
+-            for entry in reversed(applied):
+-                self._ledger.reverse(entry)
++            self._audit.record_reversal(
++                self.batch_id, f"aborted after {applied_count} ops: {exc}"
++            )
+             raise BatchError(str(exc)) from exc
+         self.committed = True
+-        return Receipt(batch_id=self.batch_id, applied=len(applied))
++        return Receipt(batch_id=self.batch_id, applied=applied_count)
++
++    def _validate_all(self) -> None:
++        """Simulate the whole batch on projected balances; raise before mutating."""
++        projected = {
++            name: self._ledger.balance(name) for name in self._ledger.accounts()
++        }
++        for op in self._ops:
++            if not isinstance(op.amount_cents, int) or isinstance(
++                op.amount_cents, bool
++            ) or op.amount_cents <= 0:
++                raise BatchError(f"{op.describe()}: amount must be a positive integer")
++            if op.account not in projected or (
++                op.destination is not None and op.destination not in projected
++            ):
++                raise BatchError(f"unknown account for {op.describe()}")
++            if op.kind == "deposit":
++                projected[op.account] += op.amount_cents
++            elif op.kind == "withdraw":
++                if projected[op.account] < op.amount_cents:
++                    raise BatchError(f"insufficient funds: {op.describe()}")
++                projected[op.account] -= op.amount_cents
++            elif op.kind == "transfer":
++                if op.destination is None or op.destination == op.account:
++                    raise BatchError("transfer needs a distinct destination account")
++                if projected[op.account] < op.amount_cents:
++                    raise BatchError(f"insufficient funds: {op.describe()}")
++                projected[op.account] -= op.amount_cents
++                projected[op.destination] += op.amount_cents
++            else:
++                raise BatchError(f"unknown operation kind: {op.kind}")

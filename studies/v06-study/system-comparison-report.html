@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentBench study — v06-system-comparison</title>
+<style>
+body{font:15px/1.55 system-ui,sans-serif;margin:2rem auto;max-width:60rem;
+padding:0 1rem;color:#1a1a2e;background:#fafafa}
+h1,h2{line-height:1.2} table{border-collapse:collapse;margin:.8rem 0;width:100%}
+/* Wide tables (long model names) scroll on narrow screens instead of
+   breaking layout; color is never the only status signal (text labels). */
+.tablewrap{overflow-x:auto}
+th,td{border:1px solid #ccc;padding:.35rem .5rem;text-align:left;vertical-align:top}
+th{background:#eee} code{background:#f0f0f0;padding:.05rem .25rem}
+.tag{font-weight:600} .limit{color:#666}
+@media print{
+  body{margin:0;max-width:none;font-size:11pt;background:#fff}
+  .tablewrap{overflow-x:visible}
+  a{color:inherit;text-decoration:none}
+}
+</style></head><body><h1>AgentBench study — v06-system-comparison</h1>
+<ul>
+<li>Experiment: <code>20260825T203921Z-05a0f1e4</code></li>
+<li>Generated: 2026-08-26T02:52:02+00:00 by AgentBench 0.6.0</li>
+<li>Created: 2026-08-25T20:39:21.004211+00:00</li>
+<li>Backend: host · repeats/cell: 3 · runs recorded: 36 of 36 planned cells</li>
+</ul>
+<h2>Configurations</h2>
+<div class="tablewrap"><table>
+<tr><th>config</th><th>identity</th><th>config hash</th></tr>
+<tr><td>claude-code-sonnet</td><td>claude-code / sonnet</td><td>`400f98ad94a8`</td></tr>
+<tr><td>omp-ox-alpha</td><td>omp / stealth/ox-alpha / provider=openrouter / reasoning=medium</td><td>`a63fcd2ae8a5`</td></tr>
+</table></div>
+<ul>
+<li>Attempted 36 runs · validly graded 36 · infra-invalid 0</li>
+<li><strong>Cell without recorded run</strong>: omp-ox-alpha / cacheflow trial 1 — setup_failed (<code>PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: &#x27;&lt;local-path&gt;&#x27;</code>)</li>
+<li><strong>Comparison mode</strong>: <code>system-comparison</code> — complete coding systems differ (harness AND model)</li>
+</ul>
+<h2>Per-config aggregate</h2>
+<div class="tablewrap"><table>
+<tr><th>config</th><th>runs</th><th>passes</th><th>pass rate</th><th>Wilson 95%</th><th>median time</th><th>median tokens</th><th>median cost</th><th>cost evidence</th><th>failures</th></tr>
+<tr><td>claude-code-sonnet</td><td>18</td><td>15</td><td>83%</td><td>[61%–94%]</td><td>49s</td><td>299.7k</td><td>$0.1579</td><td>reported</td><td>evaluation_failed:3, passed:15</td></tr>
+<tr><td>omp-ox-alpha</td><td>18</td><td>17</td><td>94%</td><td>[74%–99%]</td><td>1:26</td><td>24k</td><td>—</td><td>unpriced</td><td>evaluation_failed:1, passed:17</td></tr>
+</table></div>
+<h2>Paired outcomes (matched benchmark × trial cells)</h2>
+<ul>
+<li><strong>claude-code-sonnet vs omp-ox-alpha</strong> over 18 matched cells: both pass 15 · claude-code-sonnet only 0 · omp-ox-alpha only 2 · both fail 1</li>
+</ul>
+<p>→ marginal check: claude-code-sonnet 15 passes (15+0) · omp-ox-alpha 17 passes (15+2) · McNemar exact p=0.5</p>
+<h2>Per-benchmark results</h2>
+<div class="tablewrap"><table>
+<tr><th>benchmark</th><th>claude-code-sonnet</th><th>omp-ox-alpha</th></tr>
+<tr><td>tokenbucket</td><td>3/3 passed · 29s · 166.2k tok</td><td>3/3 passed · 1:08 · 21.5k tok</td></tr>
+<tr><td>leasekit</td><td>0/3 passed · 1:16 · 332k tok</td><td>2/3 passed · 1:47 · 22.4k tok</td></tr>
+<tr><td>statelock</td><td>3/3 passed · 1:43 · 335.9k tok</td><td>3/3 passed · 2:21 · 26.2k tok</td></tr>
+<tr><td>pluginreg</td><td>3/3 passed · 46s · 315.1k tok</td><td>3/3 passed · 1:08 · 23.1k tok</td></tr>
+<tr><td>cacheflow</td><td>3/3 passed · 37s · 178.9k tok</td><td>3/3 passed · 1:32 · 24.4k tok</td></tr>
+<tr><td>apimigrate</td><td>3/3 passed · 53s · 383.3k tok</td><td>3/3 passed · 1:32 · 25.3k tok</td></tr>
+</table></div>
+<h2>Corpus difficulty / saturation</h2>
+<div class="tablewrap"><table>
+<tr><th>benchmark</th><th>runs</th><th>classification</th><th>evidence</th></tr>
+<tr><td>apimigrate</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 graded runs)</td></tr>
+<tr><td>cacheflow</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 graded runs)</td></tr>
+<tr><td>leasekit</td><td>6</td><td>discriminating (33%)</td><td>&gt;= 25% across 6 graded runs</td></tr>
+<tr><td>pluginreg</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 graded runs)</td></tr>
+<tr><td>statelock</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 graded runs)</td></tr>
+<tr><td>tokenbucket</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 graded runs)</td></tr>
+</table></div>
+<h2>Reliability (observed repeated trials)</h2>
+<div class="tablewrap"><table>
+<tr><th>config</th><th>tasks</th><th>runs</th><th>passes</th><th>pass@1 [Wilson 95%]</th><th>any-in-k</th><th>all-k</th><th>mean p*</th></tr>
+<tr><td>claude-code-sonnet</td><td>6</td><td>18</td><td>15</td><td>83% [61%/94%]</td><td>83% (k=3)</td><td>83%</td><td>0.800</td></tr>
+<tr><td>omp-ox-alpha</td><td>6</td><td>18</td><td>17</td><td>94% [74%/99%]</td><td>100% (k=3)</td><td>83%</td><td>0.900</td></tr>
+</table></div>
+<p>\* mean p is a Beta(1,1) smoothed posterior mean — descriptive, not a</p>
+<p>classic pass@k estimator: these are observed repeated trials.</p>
+<h2>Known limitations</h2>
+<ul>
+<li>Results reflect this corpus and these configurations only; they do not generalize to other tasks or workloads.</li>
+<li>Each cell was run 3 time(s); small samples carry wide uncertainty (Wilson intervals are shown, not hidden).</li>
+<li>Cost/token figures come from each harness&#x27;s own reporting; where measurement sources differ materially, cross-agent cost comparisons are indicative only.</li>
+<li>Comparison mode: system-comparison.</li>
+</ul>
+<h2>Reproduce</h2>
+<h1>re-run the identical matrix (same benchmarks/configs/commits)</h1>
+<p>agentbench show &lt;run-id&gt;            # inspect one cell&#x27;s evidence</p>
+<p>agentbench reproduce &lt;run-id&gt;       # preflight + rerun one cell</p><footer class="limit">Generated by AgentBench
+0.6.0 on 2026-08-26T02:52:02+00:00. Mechanical report: no editorial scoring.</footer>
+</body></html>

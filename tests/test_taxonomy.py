@@ -10,6 +10,9 @@ from agentbench.taxonomy import (
     PASSED,
     PROTECTED_PATH_VIOLATION,
     classify_run,
+    classify_validity,
+    VALIDITY_INFRA_INVALID,
+    VALIDITY_VALID,
 )
 
 
@@ -64,3 +67,35 @@ class TestClassificationPrecedence:
         from agentbench.taxonomy import SETUP_FAILED  # noqa: F401
 
         assert True
+
+
+class TestValidityClassification:
+    """Outcome and validity are orthogonal (P41): a provider outage that
+    starves the agent of any model call must be visible as infra_invalid
+    while staying out of the failure-taxonomy overload."""
+
+    def test_zero_token_outage_is_infra_invalid(self):
+        assert classify_validity(
+            agent_stdout="API call failed after 3 retries: HTTP 429: Provider returned error",
+            agent_stderr="",
+            total_tokens=None,
+        ) == VALIDITY_INFRA_INVALID
+
+    def test_rate_limit_with_real_work_stays_valid(self):
+        # The agent did reach a model and produced evidence; its outcome
+        # already reflects demonstrated capability.
+        assert classify_validity(
+            agent_stdout="hit session limit near the end", agent_stderr="",
+            total_tokens=152000,
+        ) == VALIDITY_VALID
+
+    def test_clean_run_is_valid(self):
+        assert classify_validity(
+            agent_stdout="done", agent_stderr="", total_tokens=5000
+        ) == VALIDITY_VALID
+
+    def test_patterns_are_case_insensitive_and_cover_stderr(self):
+        assert classify_validity(
+            agent_stdout="", agent_stderr="Error: QUOTA exceeded for project",
+            total_tokens=0,
+        ) == VALIDITY_INFRA_INVALID

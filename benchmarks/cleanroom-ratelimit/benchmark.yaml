@@ -1,0 +1,56 @@
+name: cleanroom-ratelimit
+repository: fixture
+commit: c99af3f02efdf83e32658dcc97c32579a3a659f6
+description: |
+  Cleanroom implementation task: build a token-bucket rate limiter purely from
+  an executable specification in docs/api.md — lazy exact fractional refill
+  with capacity clamping, non-spending failed acquisitions, retry_after math,
+  injected-clock determinism, and strict input validation.
+prompt: |
+  Implement ratelimit.py to satisfy docs/api.md.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.2, required: true}
+  edge_cases:    {weight: 0.2, required: false}
+  diagnostics:   {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: tokenbucket-blackbox-contract
+      command: '"{python}" -m pytest -q'
+protected_paths:
+  - tests/**
+  - docs/**
+fail_on_protected_path_violation: true
+category: api-change
+tags: [cleanroom, rate-limit, token-bucket, spec-driven]
+suites: [cleanroom-experimental]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch   # maintainer-only minimal correct version; never exposed to agents
+timeout_seconds: 900
+results_dir: results
+# ---- v0.6 metadata ----
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "make_limiter builds an independent limiter that starts full, refills lazily and exactly from the injected clock, and never leaves the balance outside [0, capacity]"}
+  - {id: req-2, text: "try_acquire spends only on success and validates token counts; retry_after returns 0.0 when affordable, the exact wait otherwise, and inf for a non-refilling bucket"}
+  - {id: req-3, text: "No hidden wall-clock calls: all timing flows through the injected clock callable"}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["edge_cases"]}
+  - {requirement: req-3, scored_by: ["compatibility", "diagnostics"]}
+source_kind: cleanroom
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

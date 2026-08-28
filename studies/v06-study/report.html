@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentBench study — v06-model-controlled</title>
+<style>
+body{font:15px/1.55 system-ui,sans-serif;margin:2rem auto;max-width:60rem;
+padding:0 1rem;color:#1a1a2e;background:#fafafa}
+h1,h2{line-height:1.2} table{border-collapse:collapse;margin:.8rem 0;width:100%}
+/* Wide tables (long model names) scroll on narrow screens instead of
+   breaking layout; color is never the only status signal (text labels). */
+.tablewrap{overflow-x:auto}
+th,td{border:1px solid #ccc;padding:.35rem .5rem;text-align:left;vertical-align:top}
+th{background:#eee} code{background:#f0f0f0;padding:.05rem .25rem}
+.tag{font-weight:600} .limit{color:#666}
+@media print{
+  body{margin:0;max-width:none;font-size:11pt;background:#fff}
+  .tablewrap{overflow-x:visible}
+  a{color:inherit;text-decoration:none}
+}
+</style></head><body><h1>AgentBench study — v06-model-controlled</h1>
+<ul>
+<li>Experiment: <code>20260825T191521Z-4727103d</code></li>
+<li>Generated: 2026-08-26T02:51:59+00:00 by AgentBench 0.6.0</li>
+<li>Created: 2026-08-25T19:15:21.110253+00:00</li>
+<li>Backend: host · repeats/cell: 3 · runs recorded: 48 of 48 planned cells</li>
+</ul>
+<h2>Configurations</h2>
+<div class="tablewrap"><table>
+<tr><th>config</th><th>identity</th><th>config hash</th></tr>
+<tr><td>hermes-gpt-oss-20b</td><td>hermes / openai/gpt-oss-20b / provider=openrouter / reasoning=medium</td><td>`1177c6595f0a`</td></tr>
+<tr><td>hermes-ox-alpha</td><td>hermes / stealth/ox-alpha / provider=openrouter / reasoning=medium</td><td>`c8396f624342`</td></tr>
+</table></div>
+<ul>
+<li>Attempted 48 runs · validly graded 48 · infra-invalid 0</li>
+<li><strong>Comparison mode</strong>: <code>model-controlled</code> — one harness held constant; only model settings vary</li>
+</ul>
+<h2>Per-config aggregate</h2>
+<div class="tablewrap"><table>
+<tr><th>config</th><th>runs</th><th>passes</th><th>pass rate</th><th>Wilson 95%</th><th>median time</th><th>median tokens</th><th>median cost</th><th>cost evidence</th><th>failures</th></tr>
+<tr><td>hermes-gpt-oss-20b</td><td>24</td><td>13</td><td>54%</td><td>[35%–72%]</td><td>3:08</td><td>362.1k</td><td>$0.0117</td><td>provider_models_api/estimated</td><td>evaluation_failed:10, passed:13, protected_path_violation:1</td></tr>
+<tr><td>hermes-ox-alpha</td><td>24</td><td>20</td><td>83%</td><td>[64%–93%]</td><td>2:20</td><td>219.5k</td><td>—</td><td>unpriced/provider_models_api/unknown</td><td>agent_timeout:1, evaluation_failed:2, passed:20, protected_path_violation:1</td></tr>
+</table></div>
+<h2>Paired outcomes (matched benchmark × trial cells)</h2>
+<ul>
+<li><strong>hermes-ox-alpha vs hermes-gpt-oss-20b</strong> over 24 matched cells: both pass 10 · hermes-ox-alpha only 10 · hermes-gpt-oss-20b only 3 · both fail 1</li>
+</ul>
+<p>→ marginal check: hermes-ox-alpha 20 passes (10+10) · hermes-gpt-oss-20b 13 passes (10+3) · McNemar exact p=0.0923</p>
+<h2>Per-benchmark results</h2>
+<div class="tablewrap"><table>
+<tr><th>benchmark</th><th>hermes-gpt-oss-20b</th><th>hermes-ox-alpha</th></tr>
+<tr><td>tokenbucket</td><td>3/3 passed · 2:00 · 329.7k tok</td><td>2/3 passed · 2:04 · 219.5k tok</td></tr>
+<tr><td>leasekit</td><td>2/3 passed · 3:12 · 372.7k tok</td><td>0/3 passed · 3:53 · 297.7k tok</td></tr>
+<tr><td>vercomp</td><td>1/3 passed · 3:04 · 368.8k tok</td><td>3/3 passed · 1:34 · 130.2k tok</td></tr>
+<tr><td>statelock</td><td>0/3 passed · 2:51 · 378.9k tok</td><td>3/3 passed · 3:16 · 274.9k tok</td></tr>
+<tr><td>pluginreg</td><td>3/3 passed · 1:31 · 168.8k tok</td><td>3/3 passed · 2:22 · 251.9k tok</td></tr>
+<tr><td>cacheflow</td><td>2/3 passed · 3:44 · 790.6k tok</td><td>3/3 passed · 2:55 · 219.7k tok</td></tr>
+<tr><td>txnrollback</td><td>2/3 passed · 4:25 · 268.5k tok</td><td>3/3 passed · 1:51 · 173.9k tok</td></tr>
+<tr><td>apimigrate</td><td>0/3 passed · 3:36 · 428.2k tok</td><td>3/3 passed · 2:14 · 180.6k tok</td></tr>
+</table></div>
+<h2>Corpus difficulty / saturation</h2>
+<div class="tablewrap"><table>
+<tr><th>benchmark</th><th>runs</th><th>classification</th><th>evidence</th></tr>
+<tr><td>apimigrate</td><td>6</td><td>discriminating (50%)</td><td>&gt;= 25% across 6 graded runs</td></tr>
+<tr><td>cacheflow</td><td>6</td><td>discriminating (83%)</td><td>&gt;= 25% across 6 graded runs</td></tr>
+<tr><td>leasekit</td><td>6</td><td>discriminating (33%)</td><td>&gt;= 25% across 6 graded runs</td></tr>
+<tr><td>pluginreg</td><td>6</td><td>likely_saturated (100%)</td><td>all 2 trusted config(s) pass at &gt;= 90% (6 graded runs)</td></tr>
+<tr><td>statelock</td><td>6</td><td>discriminating (50%)</td><td>&gt;= 25% across 6 graded runs</td></tr>
+<tr><td>tokenbucket</td><td>6</td><td>discriminating (83%)</td><td>&gt;= 25% across 6 graded runs</td></tr>
+<tr><td>txnrollback</td><td>6</td><td>discriminating (83%)</td><td>&gt;= 25% across 6 graded runs</td></tr>
+<tr><td>vercomp</td><td>6</td><td>discriminating (67%)</td><td>&gt;= 25% across 6 graded runs</td></tr>
+</table></div>
+<h2>Reliability (observed repeated trials)</h2>
+<div class="tablewrap"><table>
+<tr><th>config</th><th>tasks</th><th>runs</th><th>passes</th><th>pass@1 [Wilson 95%]</th><th>any-in-k</th><th>all-k</th><th>mean p*</th></tr>
+<tr><td>hermes-gpt-oss-20b</td><td>8</td><td>24</td><td>13</td><td>54% [35%/72%]</td><td>75% (k=3)</td><td>25%</td><td>0.538</td></tr>
+<tr><td>hermes-ox-alpha</td><td>8</td><td>24</td><td>20</td><td>83% [64%/93%]</td><td>88% (k=3)</td><td>75%</td><td>0.808</td></tr>
+</table></div>
+<p>\* mean p is a Beta(1,1) smoothed posterior mean — descriptive, not a</p>
+<p>classic pass@k estimator: these are observed repeated trials.</p>
+<h2>Known limitations</h2>
+<ul>
+<li>Results reflect this corpus and these configurations only; they do not generalize to other tasks or workloads.</li>
+<li>Each cell was run 3 time(s); small samples carry wide uncertainty (Wilson intervals are shown, not hidden).</li>
+<li>Cost/token figures come from each harness&#x27;s own reporting; where measurement sources differ materially, cross-agent cost comparisons are indicative only.</li>
+<li>Comparison mode: model-controlled.</li>
+</ul>
+<h2>Reproduce</h2>
+<h1>re-run the identical matrix (same benchmarks/configs/commits)</h1>
+<p>agentbench show &lt;run-id&gt;            # inspect one cell&#x27;s evidence</p>
+<p>agentbench reproduce &lt;run-id&gt;       # preflight + rerun one cell</p><footer class="limit">Generated by AgentBench
+0.6.0 on 2026-08-26T02:51:59+00:00. Mechanical report: no editorial scoring.</footer>
+</body></html>

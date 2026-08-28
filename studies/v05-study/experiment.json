@@ -1,11 +1,12 @@
 {
   "schema_version": 1,
-  "experiment_id": "20260825T010230Z-4caf630c",
+  "experiment_id": "20260824T213115Z-78d3985e",
   "name": "v05-study",
-  "created_at": "2026-08-25T01:02:30.155912+00:00",
+  "created_at": "2026-08-24T21:31:15.832885+00:00",
   "results_dir": "results",
   "planned_cells": 60,
   "repeat": 3,
+  "interrupted": false,
   "benchmark_identities": {
     "jobqueue": "186d5f4df1d3",
     "ledgerpad": "79cbe69e77a0",
@@ -22,6 +23,548 @@
     "claude-code": "400f98ad94a8",
     "hermes-openrouter": "c8396f624342"
   },
+  "completed": [
+    {
+      "cell_key": "829d3c2bad903344",
+      "benchmark": "jobqueue",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T213115Z-e14034",
+      "run_dir": "results\\jobqueue\\20260824T213115Z-e14034"
+    },
+    {
+      "cell_key": "73614eb0f8655040",
+      "benchmark": "jobqueue",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T213115Z-a76b12",
+      "run_dir": "results\\jobqueue\\20260824T213115Z-a76b12"
+    },
+    {
+      "cell_key": "f27edf15f2fc286d",
+      "benchmark": "jobqueue",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T213233Z-663bde",
+      "run_dir": "results\\jobqueue\\20260824T213233Z-663bde"
+    },
+    {
+      "cell_key": "f7dbe1683728c1b2",
+      "benchmark": "jobqueue",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T213227Z-eb0f5d",
+      "run_dir": "results\\jobqueue\\20260824T213227Z-eb0f5d"
+    },
+    {
+      "cell_key": "06a11ae86e8fa328",
+      "benchmark": "jobqueue",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T213319Z-2c4a76",
+      "run_dir": "results\\jobqueue\\20260824T213319Z-2c4a76"
+    },
+    {
+      "cell_key": "c68d265792899e8b",
+      "benchmark": "jobqueue",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260824T213348Z-4a8092",
+      "run_dir": "results\\jobqueue\\20260824T213348Z-4a8092"
+    },
+    {
+      "cell_key": "33297f70371f2b71",
+      "benchmark": "ledgerpad",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T213400Z-90a0ec",
+      "run_dir": "results\\ledgerpad\\20260824T213400Z-90a0ec"
+    },
+    {
+      "cell_key": "0e1bb5d64b285c53",
+      "benchmark": "ledgerpad",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T213431Z-c01494",
+      "run_dir": "results\\ledgerpad\\20260824T213431Z-c01494"
+    },
+    {
+      "cell_key": "1287fc256daff3c7",
+      "benchmark": "ledgerpad",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T213625Z-4ca42a",
+      "run_dir": "results\\ledgerpad\\20260824T213625Z-4ca42a"
+    },
+    {
+      "cell_key": "0329811e17590b97",
+      "benchmark": "ledgerpad",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T213528Z-e96828",
+      "run_dir": "results\\ledgerpad\\20260824T213528Z-e96828"
+    },
+    {
+      "cell_key": "01a5611cb319c35d",
+      "benchmark": "ledgerpad",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T213704Z-460e91",
+      "run_dir": "results\\ledgerpad\\20260824T213704Z-460e91"
+    },
+    {
+      "cell_key": "e31f8f42885d8ad0",
+      "benchmark": "ledgerpad",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260824T213726Z-72d322",
+      "run_dir": "results\\ledgerpad\\20260824T213726Z-72d322"
+    },
+    {
+      "cell_key": "d4284840a1b7c51c",
+      "benchmark": "iniforge",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T213750Z-a85e8e",
+      "run_dir": "results\\iniforge\\20260824T213750Z-a85e8e"
+    },
+    {
+      "cell_key": "45806712537a995c",
+      "benchmark": "iniforge",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T213833Z-01a719",
+      "run_dir": "results\\iniforge\\20260824T213833Z-01a719"
+    },
+    {
+      "cell_key": "96cef78220616642",
+      "benchmark": "iniforge",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T213926Z-384f37",
+      "run_dir": "results\\iniforge\\20260824T213926Z-384f37"
+    },
+    {
+      "cell_key": "8646c7d4295dc20f",
+      "benchmark": "iniforge",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T214006Z-4579ed",
+      "run_dir": "results\\iniforge\\20260824T214006Z-4579ed"
+    },
+    {
+      "cell_key": "42315527b52c717c",
+      "benchmark": "iniforge",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T213806Z-6631b2",
+      "run_dir": "results\\iniforge\\20260824T213806Z-6631b2"
+    },
+    {
+      "cell_key": "6e79b36b58b1a970",
+      "benchmark": "iniforge",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260824T214049Z-bd999f",
+      "run_dir": "results\\iniforge\\20260824T214049Z-bd999f"
+    },
+    {
+      "cell_key": "e27f9b241f6f2072",
+      "benchmark": "csvroll",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T214127Z-e153db",
+      "run_dir": "results\\csvroll\\20260824T214127Z-e153db"
+    },
+    {
+      "cell_key": "560de6e369fb84b2",
+      "benchmark": "csvroll",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T214103Z-d1f545",
+      "run_dir": "results\\csvroll\\20260824T214103Z-d1f545"
+    },
+    {
+      "cell_key": "e34094595ffcf2ef",
+      "benchmark": "csvroll",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T214412Z-e892d4",
+      "run_dir": "results\\csvroll\\20260824T214412Z-e892d4"
+    },
+    {
+      "cell_key": "5656f8a592d893bb",
+      "benchmark": "csvroll",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T214452Z-082d1b",
+      "run_dir": "results\\csvroll\\20260824T214452Z-082d1b"
+    },
+    {
+      "cell_key": "dec404027c66d67b",
+      "benchmark": "csvroll",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260824T214533Z-9d453f",
+      "run_dir": "results\\csvroll\\20260824T214533Z-9d453f"
+    },
+    {
+      "cell_key": "a5da5b454f69a5ae",
+      "benchmark": "csvroll",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T214403Z-2cc560",
+      "run_dir": "results\\csvroll\\20260824T214403Z-2cc560"
+    },
+    {
+      "cell_key": "407366954dd300cd",
+      "benchmark": "prefsfile",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T214629Z-375c6c",
+      "run_dir": "results\\prefsfile\\20260824T214629Z-375c6c"
+    },
+    {
+      "cell_key": "48bcd7ef23cfc494",
+      "benchmark": "prefsfile",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T214858Z-c4e7c1",
+      "run_dir": "results\\prefsfile\\20260824T214858Z-c4e7c1"
+    },
+    {
+      "cell_key": "be626d2f024039be",
+      "benchmark": "prefsfile",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T214617Z-0c2f86",
+      "run_dir": "results\\prefsfile\\20260824T214617Z-0c2f86"
+    },
+    {
+      "cell_key": "511652efd580feba",
+      "benchmark": "prefsfile",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T215045Z-a1c5df",
+      "run_dir": "results\\prefsfile\\20260824T215045Z-a1c5df"
+    },
+    {
+      "cell_key": "26cb468cf737a6c4",
+      "benchmark": "prefsfile",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T215120Z-02fb8e",
+      "run_dir": "results\\prefsfile\\20260824T215120Z-02fb8e"
+    },
+    {
+      "cell_key": "3151671f21691881",
+      "benchmark": "prefsfile",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260824T215129Z-e33ab6",
+      "run_dir": "results\\prefsfile\\20260824T215129Z-e33ab6"
+    },
+    {
+      "cell_key": "5bfb5771bd399ca4",
+      "benchmark": "tokenbucket",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T215204Z-ebd5d0",
+      "run_dir": "results\\tokenbucket\\20260824T215204Z-ebd5d0"
+    },
+    {
+      "cell_key": "dcc88b388d0fe9cf",
+      "benchmark": "tokenbucket",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T215213Z-c0a458",
+      "run_dir": "results\\tokenbucket\\20260824T215213Z-c0a458"
+    },
+    {
+      "cell_key": "acda15fcf3c1fa7c",
+      "benchmark": "tokenbucket",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T215346Z-1b5d2b",
+      "run_dir": "results\\tokenbucket\\20260824T215346Z-1b5d2b"
+    },
+    {
+      "cell_key": "e688e5f95e20e2f1",
+      "benchmark": "tokenbucket",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T215338Z-8a410d",
+      "run_dir": "results\\tokenbucket\\20260824T215338Z-8a410d"
+    },
+    {
+      "cell_key": "7e15afd5649d7283",
+      "benchmark": "tokenbucket",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T215424Z-1eb933",
+      "run_dir": "results\\tokenbucket\\20260824T215424Z-1eb933"
+    },
+    {
+      "cell_key": "e1f5c80362c7c5c1",
+      "benchmark": "tokenbucket",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260824T215457Z-7531bc",
+      "run_dir": "results\\tokenbucket\\20260824T215457Z-7531bc"
+    },
+    {
+      "cell_key": "4d7d658c9777692e",
+      "benchmark": "vercomp",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T215504Z-5d5e1a",
+      "run_dir": "results\\vercomp\\20260824T215504Z-5d5e1a"
+    },
+    {
+      "cell_key": "b35a6858a6e42ff3",
+      "benchmark": "vercomp",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T215537Z-e00072",
+      "run_dir": "results\\vercomp\\20260824T215537Z-e00072"
+    },
+    {
+      "cell_key": "e8275590063d82c8",
+      "benchmark": "vercomp",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T215840Z-4de161",
+      "run_dir": "results\\vercomp\\20260824T215840Z-4de161"
+    },
+    {
+      "cell_key": "b3f88d3fb2845c7d",
+      "benchmark": "vercomp",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T215921Z-bf49c5",
+      "run_dir": "results\\vercomp\\20260824T215921Z-bf49c5"
+    },
+    {
+      "cell_key": "074217bcb99c8e4b",
+      "benchmark": "vercomp",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260824T220001Z-30db0d",
+      "run_dir": "results\\vercomp\\20260824T220001Z-30db0d"
+    },
+    {
+      "cell_key": "ab3963ad5be5cad2",
+      "benchmark": "vercomp",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T215803Z-ea4e2c",
+      "run_dir": "results\\vercomp\\20260824T215803Z-ea4e2c"
+    },
+    {
+      "cell_key": "22f1a33e09da78b8",
+      "benchmark": "leasekit",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T220227Z-13ff7d",
+      "run_dir": "results\\leasekit\\20260824T220227Z-13ff7d"
+    },
+    {
+      "cell_key": "fd17161ad47ce3bc",
+      "benchmark": "leasekit",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T220040Z-efe7f8",
+      "run_dir": "results\\leasekit\\20260824T220040Z-efe7f8"
+    },
+    {
+      "cell_key": "8db9c2c827c144fb",
+      "benchmark": "leasekit",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "evaluation_failed",
+      "run_id": "20260824T220726Z-223220",
+      "run_dir": "results\\leasekit\\20260824T220726Z-223220"
+    },
+    {
+      "cell_key": "ca9f916cc5f2542f",
+      "benchmark": "leasekit",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "evaluation_failed",
+      "run_id": "20260824T221013Z-96bac8",
+      "run_dir": "results\\leasekit\\20260824T221013Z-96bac8"
+    },
+    {
+      "cell_key": "2163bb6f069b55e4",
+      "benchmark": "leasekit",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "evaluation_failed",
+      "run_id": "20260824T220700Z-e549a9",
+      "run_dir": "results\\leasekit\\20260824T220700Z-e549a9"
+    },
+    {
+      "cell_key": "9823adc5125d3093",
+      "benchmark": "leasekit",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T221059Z-f816ba",
+      "run_dir": "results\\leasekit\\20260824T221059Z-f816ba"
+    },
+    {
+      "cell_key": "d2d57c7fd9135d15",
+      "benchmark": "statediag",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T221131Z-cbe127",
+      "run_dir": "results\\statediag\\20260824T221131Z-cbe127"
+    },
+    {
+      "cell_key": "d6088f2da9012982",
+      "benchmark": "statediag",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T221312Z-d0a8e9",
+      "run_dir": "results\\statediag\\20260824T221312Z-d0a8e9"
+    },
+    {
+      "cell_key": "32f32bb94df3daad",
+      "benchmark": "statediag",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T221358Z-8f56cc",
+      "run_dir": "results\\statediag\\20260824T221358Z-8f56cc"
+    },
+    {
+      "cell_key": "7d1d641afc4a219e",
+      "benchmark": "statediag",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T221439Z-87e1fc",
+      "run_dir": "results\\statediag\\20260824T221439Z-87e1fc"
+    },
+    {
+      "cell_key": "f12e5692fb2eafae",
+      "benchmark": "statediag",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T221543Z-de1c93",
+      "run_dir": "results\\statediag\\20260824T221543Z-de1c93"
+    },
+    {
+      "cell_key": "2c4e83e867eaf938",
+      "benchmark": "statediag",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T221742Z-18650d",
+      "run_dir": "results\\statediag\\20260824T221742Z-18650d"
+    },
+    {
+      "cell_key": "2321ee549239c863",
+      "benchmark": "bankday",
+      "config": "claude-code",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T221910Z-e87f2b",
+      "run_dir": "results\\bankday\\20260824T221910Z-e87f2b"
+    },
+    {
+      "cell_key": "dfca4db0a65ec617",
+      "benchmark": "bankday",
+      "config": "claude-code",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T222042Z-2bbad4",
+      "run_dir": "results\\bankday\\20260824T222042Z-2bbad4"
+    },
+    {
+      "cell_key": "147968ba3bc1e3f8",
+      "benchmark": "bankday",
+      "config": "claude-code",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T222056Z-c20689",
+      "run_dir": "results\\bankday\\20260824T222056Z-c20689"
+    },
+    {
+      "cell_key": "4abfaaae51546560",
+      "benchmark": "bankday",
+      "config": "hermes-openrouter",
+      "trial": 1,
+      "status": "passed",
+      "run_id": "20260824T222212Z-de3fe9",
+      "run_dir": "results\\bankday\\20260824T222212Z-de3fe9"
+    },
+    {
+      "cell_key": "c087478ca91020fb",
+      "benchmark": "bankday",
+      "config": "hermes-openrouter",
+      "trial": 2,
+      "status": "passed",
+      "run_id": "20260824T222243Z-5ade6f",
+      "run_dir": "results\\bankday\\20260824T222243Z-5ade6f"
+    },
+    {
+      "cell_key": "df8d48e1d808668d",
+      "benchmark": "bankday",
+      "config": "hermes-openrouter",
+      "trial": 3,
+      "status": "passed",
+      "run_id": "20260824T222354Z-b97e23",
+      "run_dir": "results\\bankday\\20260824T222354Z-b97e23"
+    }
+  ],
   "config_definitions": {
     "claude-code": {
       "agent": {
@@ -51,6 +594,8 @@
     }
   },
   "execution_backend": "host",
+  "comparison_mode": "system-comparison",
+  "comparison_warnings": [],
   "resolved_benchmarks": [
     "jobqueue",
     "ledgerpad",
@@ -62,548 +607,5 @@
     "leasekit",
     "statediag",
     "bankday"
-  ],
-  "completed": [
-    {
-      "cell_key": "829d3c2bad903344",
-      "benchmark": "jobqueue",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T010230Z-1d1b3f",
-      "run_dir": "results\\jobqueue\\20260825T010230Z-1d1b3f"
-    },
-    {
-      "cell_key": "73614eb0f8655040",
-      "benchmark": "jobqueue",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T010230Z-da6f7f",
-      "run_dir": "results\\jobqueue\\20260825T010230Z-da6f7f"
-    },
-    {
-      "cell_key": "f7dbe1683728c1b2",
-      "benchmark": "jobqueue",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T010256Z-02630b",
-      "run_dir": "results\\jobqueue\\20260825T010256Z-02630b"
-    },
-    {
-      "cell_key": "f27edf15f2fc286d",
-      "benchmark": "jobqueue",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T010259Z-70d5ac",
-      "run_dir": "results\\jobqueue\\20260825T010259Z-70d5ac"
-    },
-    {
-      "cell_key": "06a11ae86e8fa328",
-      "benchmark": "jobqueue",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T010320Z-77cf9c",
-      "run_dir": "results\\jobqueue\\20260825T010320Z-77cf9c"
-    },
-    {
-      "cell_key": "33297f70371f2b71",
-      "benchmark": "ledgerpad",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T010454Z-ecd9f4",
-      "run_dir": "results\\ledgerpad\\20260825T010454Z-ecd9f4"
-    },
-    {
-      "cell_key": "0e1bb5d64b285c53",
-      "benchmark": "ledgerpad",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T010519Z-d0b514",
-      "run_dir": "results\\ledgerpad\\20260825T010519Z-d0b514"
-    },
-    {
-      "cell_key": "c68d265792899e8b",
-      "benchmark": "jobqueue",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T010431Z-fb6793",
-      "run_dir": "results\\jobqueue\\20260825T010431Z-fb6793"
-    },
-    {
-      "cell_key": "0329811e17590b97",
-      "benchmark": "ledgerpad",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T010547Z-22579f",
-      "run_dir": "results\\ledgerpad\\20260825T010547Z-22579f"
-    },
-    {
-      "cell_key": "01a5611cb319c35d",
-      "benchmark": "ledgerpad",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T010616Z-c05351",
-      "run_dir": "results\\ledgerpad\\20260825T010616Z-c05351"
-    },
-    {
-      "cell_key": "1287fc256daff3c7",
-      "benchmark": "ledgerpad",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T010606Z-a25944",
-      "run_dir": "results\\ledgerpad\\20260825T010606Z-a25944"
-    },
-    {
-      "cell_key": "d4284840a1b7c51c",
-      "benchmark": "iniforge",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T010753Z-f4c1d1",
-      "run_dir": "results\\iniforge\\20260825T010753Z-f4c1d1"
-    },
-    {
-      "cell_key": "42315527b52c717c",
-      "benchmark": "iniforge",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T010826Z-ea55ee",
-      "run_dir": "results\\iniforge\\20260825T010826Z-ea55ee"
-    },
-    {
-      "cell_key": "e31f8f42885d8ad0",
-      "benchmark": "ledgerpad",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T010735Z-fec98c",
-      "run_dir": "results\\ledgerpad\\20260825T010735Z-fec98c"
-    },
-    {
-      "cell_key": "45806712537a995c",
-      "benchmark": "iniforge",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T010856Z-5f8a65",
-      "run_dir": "results\\iniforge\\20260825T010856Z-5f8a65"
-    },
-    {
-      "cell_key": "8646c7d4295dc20f",
-      "benchmark": "iniforge",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T010923Z-2fca35",
-      "run_dir": "results\\iniforge\\20260825T010923Z-2fca35"
-    },
-    {
-      "cell_key": "96cef78220616642",
-      "benchmark": "iniforge",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T010911Z-e19504",
-      "run_dir": "results\\iniforge\\20260825T010911Z-e19504"
-    },
-    {
-      "cell_key": "560de6e369fb84b2",
-      "benchmark": "csvroll",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T011126Z-a0b3cb",
-      "run_dir": "results\\csvroll\\20260825T011126Z-a0b3cb"
-    },
-    {
-      "cell_key": "e27f9b241f6f2072",
-      "benchmark": "csvroll",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T011200Z-83109e",
-      "run_dir": "results\\csvroll\\20260825T011200Z-83109e"
-    },
-    {
-      "cell_key": "a5da5b454f69a5ae",
-      "benchmark": "csvroll",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T011234Z-0186c8",
-      "run_dir": "results\\csvroll\\20260825T011234Z-0186c8"
-    },
-    {
-      "cell_key": "6e79b36b58b1a970",
-      "benchmark": "iniforge",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T011109Z-fd7a31",
-      "run_dir": "results\\iniforge\\20260825T011109Z-fd7a31"
-    },
-    {
-      "cell_key": "e34094595ffcf2ef",
-      "benchmark": "csvroll",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T011309Z-fb699a",
-      "run_dir": "results\\csvroll\\20260825T011309Z-fb699a"
-    },
-    {
-      "cell_key": "5656f8a592d893bb",
-      "benchmark": "csvroll",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T011342Z-2f762e",
-      "run_dir": "results\\csvroll\\20260825T011342Z-2f762e"
-    },
-    {
-      "cell_key": "be626d2f024039be",
-      "benchmark": "prefsfile",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T011528Z-031e6d",
-      "run_dir": "results\\prefsfile\\20260825T011528Z-031e6d"
-    },
-    {
-      "cell_key": "dec404027c66d67b",
-      "benchmark": "csvroll",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T011450Z-89a7ac",
-      "run_dir": "results\\csvroll\\20260825T011450Z-89a7ac"
-    },
-    {
-      "cell_key": "407366954dd300cd",
-      "benchmark": "prefsfile",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T011605Z-7d41e8",
-      "run_dir": "results\\prefsfile\\20260825T011605Z-7d41e8"
-    },
-    {
-      "cell_key": "48bcd7ef23cfc494",
-      "benchmark": "prefsfile",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T011620Z-e48836",
-      "run_dir": "results\\prefsfile\\20260825T011620Z-e48836"
-    },
-    {
-      "cell_key": "511652efd580feba",
-      "benchmark": "prefsfile",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T011632Z-17d5c2",
-      "run_dir": "results\\prefsfile\\20260825T011632Z-17d5c2"
-    },
-    {
-      "cell_key": "26cb468cf737a6c4",
-      "benchmark": "prefsfile",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T011701Z-b7c413",
-      "run_dir": "results\\prefsfile\\20260825T011701Z-b7c413"
-    },
-    {
-      "cell_key": "3151671f21691881",
-      "benchmark": "prefsfile",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T011811Z-55fc25",
-      "run_dir": "results\\prefsfile\\20260825T011811Z-55fc25"
-    },
-    {
-      "cell_key": "5bfb5771bd399ca4",
-      "benchmark": "tokenbucket",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T011921Z-77fd72",
-      "run_dir": "results\\tokenbucket\\20260825T011921Z-77fd72"
-    },
-    {
-      "cell_key": "dcc88b388d0fe9cf",
-      "benchmark": "tokenbucket",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T011952Z-e8ddae",
-      "run_dir": "results\\tokenbucket\\20260825T011952Z-e8ddae"
-    },
-    {
-      "cell_key": "e688e5f95e20e2f1",
-      "benchmark": "tokenbucket",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T011954Z-21deb0",
-      "run_dir": "results\\tokenbucket\\20260825T011954Z-21deb0"
-    },
-    {
-      "cell_key": "acda15fcf3c1fa7c",
-      "benchmark": "tokenbucket",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T012023Z-52c34c",
-      "run_dir": "results\\tokenbucket\\20260825T012023Z-52c34c"
-    },
-    {
-      "cell_key": "7e15afd5649d7283",
-      "benchmark": "tokenbucket",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T012024Z-225084",
-      "run_dir": "results\\tokenbucket\\20260825T012024Z-225084"
-    },
-    {
-      "cell_key": "4d7d658c9777692e",
-      "benchmark": "vercomp",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T012210Z-6d07e9",
-      "run_dir": "results\\vercomp\\20260825T012210Z-6d07e9"
-    },
-    {
-      "cell_key": "e1f5c80362c7c5c1",
-      "benchmark": "tokenbucket",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "evaluation_failed",
-      "run_id": "20260825T012150Z-0bb319",
-      "run_dir": "results\\tokenbucket\\20260825T012150Z-0bb319"
-    },
-    {
-      "cell_key": "b35a6858a6e42ff3",
-      "benchmark": "vercomp",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T012252Z-039bf6",
-      "run_dir": "results\\vercomp\\20260825T012252Z-039bf6"
-    },
-    {
-      "cell_key": "ab3963ad5be5cad2",
-      "benchmark": "vercomp",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T012328Z-e1e2c9",
-      "run_dir": "results\\vercomp\\20260825T012328Z-e1e2c9"
-    },
-    {
-      "cell_key": "e8275590063d82c8",
-      "benchmark": "vercomp",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T012338Z-5eb0a5",
-      "run_dir": "results\\vercomp\\20260825T012338Z-5eb0a5"
-    },
-    {
-      "cell_key": "b3f88d3fb2845c7d",
-      "benchmark": "vercomp",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T012418Z-3dafe1",
-      "run_dir": "results\\vercomp\\20260825T012418Z-3dafe1"
-    },
-    {
-      "cell_key": "fd17161ad47ce3bc",
-      "benchmark": "leasekit",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "agent_failed",
-      "run_id": "20260825T012628Z-967e90",
-      "run_dir": "results\\leasekit\\20260825T012628Z-967e90"
-    },
-    {
-      "cell_key": "22f1a33e09da78b8",
-      "benchmark": "leasekit",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "agent_failed",
-      "run_id": "20260825T012637Z-688910",
-      "run_dir": "results\\leasekit\\20260825T012637Z-688910"
-    },
-    {
-      "cell_key": "2163bb6f069b55e4",
-      "benchmark": "leasekit",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "agent_failed",
-      "run_id": "20260825T012645Z-76f37c",
-      "run_dir": "results\\leasekit\\20260825T012645Z-76f37c"
-    },
-    {
-      "cell_key": "074217bcb99c8e4b",
-      "benchmark": "vercomp",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T012505Z-7412a6",
-      "run_dir": "results\\vercomp\\20260825T012505Z-7412a6"
-    },
-    {
-      "cell_key": "8db9c2c827c144fb",
-      "benchmark": "leasekit",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T012653Z-2f5242",
-      "run_dir": "results\\leasekit\\20260825T012653Z-2f5242"
-    },
-    {
-      "cell_key": "9823adc5125d3093",
-      "benchmark": "leasekit",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T012829Z-29c312",
-      "run_dir": "results\\leasekit\\20260825T012829Z-29c312"
-    },
-    {
-      "cell_key": "d2d57c7fd9135d15",
-      "benchmark": "statediag",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T013010Z-1d2386",
-      "run_dir": "results\\statediag\\20260825T013010Z-1d2386"
-    },
-    {
-      "cell_key": "d6088f2da9012982",
-      "benchmark": "statediag",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T013051Z-749f5d",
-      "run_dir": "results\\statediag\\20260825T013051Z-749f5d"
-    },
-    {
-      "cell_key": "32f32bb94df3daad",
-      "benchmark": "statediag",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T013135Z-37b3e8",
-      "run_dir": "results\\statediag\\20260825T013135Z-37b3e8"
-    },
-    {
-      "cell_key": "7d1d641afc4a219e",
-      "benchmark": "statediag",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T013210Z-d02667",
-      "run_dir": "results\\statediag\\20260825T013210Z-d02667"
-    },
-    {
-      "cell_key": "ca9f916cc5f2542f",
-      "benchmark": "leasekit",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "evaluation_failed",
-      "run_id": "20260825T012711Z-7eea25",
-      "run_dir": "results\\leasekit\\20260825T012711Z-7eea25"
-    },
-    {
-      "cell_key": "f12e5692fb2eafae",
-      "benchmark": "statediag",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T013343Z-eada76",
-      "run_dir": "results\\statediag\\20260825T013343Z-eada76"
-    },
-    {
-      "cell_key": "2c4e83e867eaf938",
-      "benchmark": "statediag",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T013411Z-f74bd4",
-      "run_dir": "results\\statediag\\20260825T013411Z-f74bd4"
-    },
-    {
-      "cell_key": "2321ee549239c863",
-      "benchmark": "bankday",
-      "config": "claude-code",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T013602Z-abb70e",
-      "run_dir": "results\\bankday\\20260825T013602Z-abb70e"
-    },
-    {
-      "cell_key": "dfca4db0a65ec617",
-      "benchmark": "bankday",
-      "config": "claude-code",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T013626Z-5fcb1d",
-      "run_dir": "results\\bankday\\20260825T013626Z-5fcb1d"
-    },
-    {
-      "cell_key": "147968ba3bc1e3f8",
-      "benchmark": "bankday",
-      "config": "claude-code",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T013633Z-410a0a",
-      "run_dir": "results\\bankday\\20260825T013633Z-410a0a"
-    },
-    {
-      "cell_key": "4abfaaae51546560",
-      "benchmark": "bankday",
-      "config": "hermes-openrouter",
-      "trial": 1,
-      "status": "passed",
-      "run_id": "20260825T013704Z-327158",
-      "run_dir": "results\\bankday\\20260825T013704Z-327158"
-    },
-    {
-      "cell_key": "c087478ca91020fb",
-      "benchmark": "bankday",
-      "config": "hermes-openrouter",
-      "trial": 2,
-      "status": "passed",
-      "run_id": "20260825T013706Z-72d456",
-      "run_dir": "results\\bankday\\20260825T013706Z-72d456"
-    },
-    {
-      "cell_key": "df8d48e1d808668d",
-      "benchmark": "bankday",
-      "config": "hermes-openrouter",
-      "trial": 3,
-      "status": "passed",
-      "run_id": "20260825T013845Z-d97e13",
-      "run_dir": "results\\bankday\\20260825T013845Z-d97e13"
-    }
-  ],
-  "interrupted": false
+  ]
 }

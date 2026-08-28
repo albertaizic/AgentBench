@@ -1,0 +1,4 @@
+# Deterministic packaging and cross-platform patch application:
+# benchmark assets ship inside the wheel and are applied with `git apply`
+# against fresh checkouts, so they must be LF on every platform.
+benchmarks/** text=auto eol=lf

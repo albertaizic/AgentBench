@@ -20,7 +20,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from agentbench.models import ExperimentSpec
+from agentbench.models import ExperimentSpec, validate_comparison_mode
 
 
 class ExperimentError(RuntimeError):
@@ -39,20 +39,26 @@ class ExperimentManifest(BaseModel):
     results_dir: str
     planned_cells: int
     repeat: int
-    # Identity snapshots at planning time (content-derived, not display names).
-    benchmark_identities: dict[str, str]  # name -> config hash of the loaded spec
-    config_identities: dict[str, str]  # config name -> hash
+    interrupted: bool = False
+    benchmark_identities: dict[str, str] = Field(default_factory=dict)
+    config_identities: dict[str, str] = Field(default_factory=dict)
+    completed: list[dict] = Field(default_factory=list)
     # Full definition snapshot per config (agent incl. adapter/model/provider/
     # reasoning, plus execution overrides). Reports render exact model/config
     # identity from here without re-resolving YAML that may have changed since.
     config_definitions: dict[str, dict] = Field(default_factory=dict)
     execution_backend: str | None = None
+    # Explicit comparison intent (P1). Persisted so reports can label results
+    # "system-comparison" vs "model-controlled" etc. instead of leaving
+    # readers to guess whether harness or model is the variable.
+    comparison_mode: str = "system-comparison"
+    # Non-fatal creation-time findings (e.g. scaffold-controlled equivalence
+    # warnings). Errors block creation; warnings ride along with the evidence.
+    comparison_warnings: list[str] = Field(default_factory=list)
     # Concrete benchmark names resolved at creation time. Metadata selectors
     # (suite/tags/category) are resolved once; later corpus changes never
     # silently alter an existing experiment.
     resolved_benchmarks: list[str] = Field(default_factory=list)
-    completed: list[dict] = Field(default_factory=list)
-    interrupted: bool = False
 
     def cell_done(self, key: str) -> bool:
         return any(record["cell_key"] == key for record in self.completed)
@@ -141,16 +147,6 @@ def load_manifest(path: Path) -> ExperimentManifest:
         raise ExperimentError(f"invalid experiment manifest {path}: {exc}") from exc
 
 
-def save_manifest(manifest: ExperimentManifest, directory: Path) -> Path:
-    """Write the manifest atomically (temp file + replace)."""
-    directory.mkdir(parents=True, exist_ok=True)
-    target = directory / "experiment.json"
-    temp = directory / "experiment.json.tmp"
-    temp.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
-    temp.replace(target)
-    return target
-
-
 def new_manifest(
     spec: ExperimentSpec,
     experiment_id: str,
@@ -178,7 +174,19 @@ def new_manifest(
         },
         execution_backend=(spec.execution.backend if spec.execution else None),
         resolved_benchmarks=list(benchmarks),
+        comparison_mode=spec.comparison_mode,
+        comparison_warnings=list(spec.comparison_warnings),
     )
+
+
+def save_manifest(manifest: ExperimentManifest, directory: Path) -> Path:
+    """Write the manifest atomically (temp file + replace)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / "experiment.json"
+    temp = directory / "experiment.json.tmp"
+    temp.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+    temp.replace(target)
+    return target
 
 
 __all__ = [
@@ -191,4 +199,5 @@ __all__ = [
     "new_manifest",
     "plan_cells",
     "save_manifest",
+    "validate_comparison_mode",
 ]

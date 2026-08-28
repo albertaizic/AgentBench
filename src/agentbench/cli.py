@@ -12,6 +12,7 @@ corrupted index), never because a benchmark failed.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import statistics
 from pathlib import Path
@@ -88,7 +89,13 @@ def _index_outcome(results_root: Path, outcome: RunOutcome) -> None:
 def _open_index(results_dir: str) -> ResultIndex:
     try:
         index = ResultIndex(default_db_path(Path(results_dir)))
-        index.scan_results(Path(results_dir))
+        _indexed, skipped = index.scan_results(Path(results_dir))
+        if skipped:
+            console.print(
+                f"[yellow]Warning: {skipped} result.json file(s) were unreadable"
+                " and were skipped from the index; the files themselves are"
+                " untouched.[/]"
+            )
         return index
     except (sqlite3.DatabaseError, OSError) as exc:
         console.print(f"[red]Result index unusable ({exc}); JSON evidence is unaffected.[/]")
@@ -711,7 +718,317 @@ def benchmark_validate(
 
     if not report.ok:
         raise typer.Exit(code=EXIT_FAIL)
+
+
+@benchmark_app.command("init")
+def benchmark_init(
+    name: str = typer.Argument(..., help="New benchmark name (lowercase)."),
+    language: str = typer.Option("python", "--language"),
+    suite: str = typer.Option("provisional", "--suite", help="Suite tag for the new task."),
+    force: bool = typer.Option(False, "--force"),
+) -> None:
+    """Scaffold a new benchmark with the full v0.6 metadata skeleton.
+
+    Creates the directory layout and a manifest containing every quality
+    field (requirements map, provenance, human-time placeholder) as TODO
+    markers an author fills in. Nothing here runs agents.
+    """
+    import re as _re
+
+    if not _re.fullmatch(r"[a-z][a-z0-9-]{2,30}", name):
+        console.print("[red]Name must be lowercase letters/digits/hyphens (3-31 chars).[/]")
+        raise typer.Exit(code=EXIT_ERROR)
+    bench_dir = Path("benchmarks") / name
+    if bench_dir.exists() and not force:
+        console.print(f"[red]benchmarks/{name} already exists (use --force to overwrite).[/]")
+        raise typer.Exit(code=EXIT_ERROR)
+
+    today = "1970-01-01"  # author replaces with the actual authoring date
+    (bench_dir / "hidden").mkdir(parents=True, exist_ok=True)
+    (bench_dir / "reference").mkdir(parents=True, exist_ok=True)
+    if language == "typescript":
+        eval_cmd = "node run_tests.mjs"
+        fixture_files = "// TODO: fixture sources\n"
+        fixture_main = "index.js"
+    else:
+        eval_cmd = '"{python}" -m pytest -q'
+        fixture_files = "# TODO: fixture sources\n"
+        fixture_main = "package_stub.py"
+
+    (bench_dir / "benchmark.yaml").write_text(f"""name: {name}
+repository: fixture
+commit: TODO_RUN_create_fixture_py_AND_PASTE_SHA
+description: |
+  TODO: one paragraph on the seeded defect(s).
+prompt: |
+  TODO: realistic maintainer task. Observable behavior only.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: '{eval_cmd}'
+scoring_groups:
+  core_behavior: {{weight: 0.5, required: true}}
+  edge_cases: {{weight: 0.2, required: false}}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: contract
+      command: '{eval_cmd}'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: TODO
+tags: []
+suites: [{suite}]
+language: {language}
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+prompt_requirements:
+  - {{id: req-1, text: TODO}}
+requirement_mappings:
+  - {{requirement: req-1, scored_by: [core_behavior]}}
+source_kind: authored
+task_created_at: "{today}"
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional
+human_time:
+  expert_time_estimate_minutes: null   # fill when justified; method required too
+""", encoding="utf-8", newline="\n")
+    (bench_dir / "create_fixture.py").write_text(
+        f'"""Deterministic fixture generator for {name}. Prints head sha."""\n'
+        '# TODO: build the fixture repository exactly like benchmarks/csvroll/create_fixture.py\n'
+        f'repo_files = {{"{fixture_main}": {fixture_files!r}}}\n',
+        encoding="utf-8", newline="\n")
+    (bench_dir / "reference" / "NOTES.md").write_text(
+        f"# {name} — maintainer notes\n\nTODO: defect mechanism, why it discriminates.\n",
+        encoding="utf-8", newline="\n")
+    console.print(
+        f"[green]Scaffolded[/] benchmarks/{name}: manifest, hidden/, reference/.\n"
+        "Next: implement create_fixture.py, paste the sha into the manifest,\n"
+        "write evaluators + reference patch, then run "
+        "`agentbench benchmark validate {name}`.".replace("{name}", name)
+    )
     console.print("[green]Benchmark is valid.[/]")
+
+
+
+def _strip_generation_stamp(markdown_text: str) -> str:
+    """Drop the wall-clock generation line so verify compares content, not time."""
+    return "\n".join(
+        line for line in markdown_text.splitlines()
+        if not line.startswith("- Generated:")
+    ) + "\n"
+
+
+@app.command()
+def study(
+    action: str = typer.Argument(..., help="Only 'verify' is supported."),
+    study_dir: Path = typer.Argument(..., help="Directory containing report.md + experiment.json."),
+    results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir",
+                                    help="Evidence root used to recompute the report."),
+) -> None:
+    """Verify derived study artifacts against primary evidence (P37/P38).
+
+    Recomputes report.md from result evidence and checks SHA-256 hashes in
+    hashes.json. A public report must never depend on hand-typed numbers.
+    """
+    if action != "verify":
+        console.print("[red]Unknown study action:[/] use 'verify'.")
+        raise typer.Exit(code=EXIT_ERROR)
+
+    import hashlib
+
+    manifest_path = study_dir / "experiment.json"
+    report_path = study_dir / "report.md"
+    for required in (manifest_path, report_path):
+        if not required.exists():
+            console.print(f"[red]Missing artifact:[/] {required}")
+            raise typer.Exit(code=EXIT_ERROR)
+
+    from agentbench.experiments import load_manifest
+    from agentbench.reporting import build_study, render_markdown
+
+    try:
+        manifest = load_manifest(manifest_path)
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]Manifest unreadable:[/] {exc}")
+        raise typer.Exit(code=EXIT_ERROR) from exc
+
+    rows = index_rows_safe(results_dir, manifest.experiment_id)
+    recomputed = _strip_generation_stamp(
+        render_markdown(build_study(manifest, rows)))
+    stored = _strip_generation_stamp(report_path.read_text(encoding="utf-8"))
+
+    ok = True
+    if recomputed == stored:
+        console.print("[green]report.md matches recomputation from evidence.[/]")
+    else:
+        ok = False
+        console.print("[yellow]report.md differs from recomputation — either "
+                      "evidence moved or the report was hand-edited.[/]")
+
+    hashes_path = study_dir / "hashes.json"
+    if hashes_path.exists():
+        try:
+            recorded = json.loads(hashes_path.read_text(encoding="utf-8"))
+            if not isinstance(recorded, dict):
+                raise ValueError("hashes.json must be a JSON object")
+        except ValueError as exc:
+            ok = False
+            console.print(f"[red]Malformed hashes.json:[/] {exc}")
+        else:
+            mismatches = []
+            for fname, expected in sorted(recorded.items()):
+                f = study_dir / fname
+                if not f.exists():
+                    mismatches.append(f"{fname} missing")
+                    continue
+                actual = hashlib.sha256(f.read_bytes()).hexdigest()
+                if actual != expected:
+                    mismatches.append(fname)
+            # Policy: extra unmanifested files are ALLOWED (bundles may be
+            # extended locally) but never trusted — they are outside the
+            # integrity manifest, so they are surfaced as a warning.
+            extras = sorted(
+                p.name for p in study_dir.iterdir()
+                if p.is_file() and p.name != "hashes.json"
+                and p.name not in recorded
+            )
+            if mismatches:
+                ok = False
+                console.print(f"[red]Hash mismatches:[/] {', '.join(mismatches)}")
+            else:
+                console.print(f"[green]All {len(recorded)} bundle hashes verified.[/]")
+            if extras:
+                console.print(f"[yellow]Unmanifested files (not integrity-checked):[/] "
+                              f"{', '.join(extras)}")
+    else:
+        console.print("[yellow]No hashes.json present — integrity unverified.[/]")
+
+    raise typer.Exit(code=0 if ok else EXIT_FAIL)
+
+@benchmark_app.command("audit")
+def benchmark_audit(
+    benchmark: str | None = typer.Argument(None, help="Corpus name or manifest path."),
+    all_benchmarks: bool = typer.Option(False, "--all"),
+    oracle_runs: int = typer.Option(1, "--oracle-runs", min=1, max=20,
+                                    help="Repeated reference-solution executions."),
+    nop_runs: int = typer.Option(1, "--nop-runs", min=1, max=20),
+    skip_stability: bool = typer.Option(False, "--skip-stability"),
+    as_json: bool = typer.Option(False, "--json"),
+    build_report: bool = typer.Option(False, "--report", help="Quality report table + statuses."),
+) -> None:
+    """Task quality audit: stability, isolation, alignment, provenance.
+
+    Extends validate with repeated-oracle / repeated-nop stability and
+    metadata dimensions. Never invokes a coding agent. New or unaudited
+    tasks should expect provisional until real calibration.
+    """
+    from agentbench.audit import audit_benchmark
+
+    names: list[Path] = []
+    if all_benchmarks:
+        from agentbench.discovery import discover
+        for manifest in discover():
+            names.append(manifest)
+    else:
+        if benchmark is None:
+            console.print("[red]Provide a benchmark name/path or --all.[/]")
+            raise typer.Exit(code=EXIT_ERROR)
+        try:
+            names.append(find_manifest(benchmark, None))
+        except FileNotFoundError as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(code=EXIT_ERROR) from exc
+
+    reports = []
+    for manifest in names:
+        reports.append(audit_benchmark(
+            manifest,
+            oracle_runs=oracle_runs if not skip_stability else 0,
+            nop_runs=nop_runs if not skip_stability else 0,
+            skip_stability=skip_stability,
+        ))
+
+    if as_json:
+        payload = []
+        for r in reports:
+            payload.append({
+                "benchmark": r.name,
+                "quality_status": r.quality_status,
+                "dimensions": [
+                    {"name": d.name, "verdict": d.verdict, "detail": d.detail}
+                    for d in r.dimensions
+                ],
+                "oracle": r.oracle, "nop": r.nop,
+            })
+        console.print(json.dumps(payload, indent=2))
+        return
+
+    if build_report:
+        table = Table(title=f"Benchmark quality report ({len(reports)} tasks)")
+        table.add_column("BENCHMARK")
+        table.add_column("ORACLE")
+        table.add_column("NOP")
+        table.add_column("MAPPING")
+        table.add_column("ISOLATION")
+        table.add_column("PARTIAL")
+        table.add_column("STATUS")
+        for r in reports:
+            def dim(name: str) -> str:
+                for d in r.dimensions:
+                    if name in d.name:
+                        return {"PASS": "[green]ok[/]", "WARN": "[yellow]warn[/]",
+                                "FAIL": "[red]FAIL[/]"}[d.verdict]
+                return "—"
+            oracle_s = f"{r.oracle.get('passes', '—')}/{r.oracle.get('runs_requested', '—')}"
+            nop_s = f"{r.nop.get('fails', '—')}/{r.nop.get('runs_requested', '—')} fail"
+            status_color = {"release-grade": "[green]", "provisional": "[cyan]",
+                            "needs-review": "[yellow]", "invalid": "[red]"}.get(
+                                r.quality_status, "")
+            table.add_row(r.name, oracle_s, nop_s,
+                          dim("requirement_mapping"), dim("isolation"),
+                          dim("partial_score_support"),
+                          f"{status_color}{r.quality_status}")
+        console.print(table)
+        counts: dict[str, int] = {}
+        for r in reports:
+            counts[r.quality_status] = counts.get(r.quality_status, 0) + 1
+        console.print(" · ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
+        # P28 review queue: deterministic triage of flagged tasks.
+        flagged = [
+            r for r in reports
+            if r.quality_status in ("needs-review", "invalid")
+            or any(d.verdict == "WARN" for d in r.dimensions)
+        ]
+        if flagged:
+            console.print("[bold]Review queue[/]")
+            for r in flagged:
+                reasons = "; ".join(
+                    f"{d.name}: {d.detail[:80]}" for d in r.dimensions
+                    if d.verdict in ("WARN", "FAIL"))
+                console.print(f"  [yellow]{r.name}[/] ({r.quality_status}) — {reasons}")
+        return
+
+    failed = False
+    for r in reports:
+        table = Table(title=f"Audit: {r.name} → {r.quality_status}")
+        table.add_column("Dimension")
+        table.add_column("Verdict", justify="right")
+        table.add_column("Detail")
+        for d in r.dimensions:
+            color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}[d.verdict]
+            table.add_row(d.name, f"[{color}]{d.verdict}[/]", d.detail)
+        console.print(table)
+        if r.has_fail:
+            failed = True
+    if failed:
+        raise typer.Exit(code=EXIT_FAIL)
 
 
 @benchmark_app.command("report")
@@ -808,7 +1125,8 @@ def experiment(
     Exit code 0 means the matrix ran to completion — cell outcomes (including
     failures) are results, not errors. Exit 130 on interrupt; 2 on setup
     problems. ``--jobs N`` runs up to N cells at once; Ctrl+C stops scheduling
-    new cells and lets in-flight ones finish so their evidence stays complete.
+    new cells and interrupts in-flight ones; each interrupted cell is persisted
+    as a failed run so evidence stays complete and resumable.
     """
     from agentbench.models import ExperimentSpec
 
@@ -1116,8 +1434,14 @@ def experiment(
             bounds = (
                 f" [{interval[0]*100:.0f}%–{interval[1]*100:.0f}%]" if interval else ""
             )
+            # Experiment summaries span benchmarks: a config name alone is
+            # ambiguous because task identity (and thus grouping) is per
+            # benchmark. Scope the label unless exactly one benchmark ran.
+            scope = ""
+            if len(group.benchmarks) == 1:
+                scope = f" @ {next(iter(group.benchmarks))}"
             console.print(
-                f"{group.label}: {group.passes}/{group.runs} passed"
+                f"{group.label}{scope}: {group.passes}/{group.runs} passed"
                 f" ({format_percent(group.pass_rate)}{bounds}),"
                 f" median time {format_duration(group.median_duration)},"
                 f" median tokens {format_count(group.median_total_tokens)}"
@@ -1263,6 +1587,126 @@ def saturation(
 
 
 @app.command()
+def trajectory(
+    run_id: str = typer.Argument(..., help="A persisted run id."),
+    results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir"),
+    event_type: list[str] = typer.Option([], "--type", help="Filter by event type (repeatable)."),
+    failures_only: bool = typer.Option(False, "--failures-only"),
+    as_json: bool = typer.Option(False, "--json", help="Dump raw trajectory events."),
+) -> None:
+    """Show the normalized agent trajectory for one run.
+
+    Chronological, privacy-aware: only observable tool/command activity —
+    never model reasoning. Runs without a trajectory report unavailable.
+    """
+    from agentbench.trajectories import load_trajectory
+
+    index = _open_index(results_dir)
+    row = index.get_run(run_id)
+    if row is None:
+        console.print(f"[red]Unknown run id:[/] {run_id}")
+        raise typer.Exit(code=EXIT_ERROR)
+    header, events = load_trajectory(Path(row["result_dir"]))
+    if not header:
+        console.print(f"[yellow]No trajectory recorded for {run_id} "
+                      f"(pre-v0.6 run or extraction unavailable).[/]")
+        raise typer.Exit(code=0)
+
+    if failures_only:
+        events = [e for e in events if e.get("success") is False
+                  or e.get("event_type") == "error"]
+    if event_type:
+        wanted = set()
+        for t in event_type:
+            alias = {
+                "tool": ("shell_command", "file_read", "file_write", "file_edit",
+                         "test_command", "git_command", "search", "tool_call"),
+                "test": ("test_command",),
+                "edit": ("file_edit", "file_write"),
+            }.get(t.lower(), (t.lower(),))
+            wanted.update(alias)
+        events = [e for e in events if e.get("event_type") in wanted]
+
+    console.print(
+        f"[bold]Trajectory[/] {run_id} · agent={header.get('agent_type')} · "
+        f"status={header.get('trajectory_status')} · events={header.get('event_count')}"
+    )
+    if as_json:
+        console.print(json.dumps(events, indent=2))
+        return
+    for ev in events:
+        rel = ev.get("relative_ms")
+        stamp = f"{rel/1000:6.1f}s" if isinstance(rel, (int, float)) else "     —"
+        etype = ev.get("event_type") or "?"
+        tool = ev.get("tool")
+        detail = ""
+        md = ev.get("metadata") or {}
+        if md.get("command"):
+            detail = str(md["command"])[:80]
+        elif ev.get("path"):
+            detail = str(ev["path"])[:80]
+        success = ev.get("success")
+        mark = ""
+        if success is False:
+            mark = "[red]✗[/] "
+        console.print(f"{stamp}  {mark}{etype:<14} {(tool or ''):<8} {detail}")
+
+
+@app.command()
+def rescore(
+    run_id: str = typer.Argument(None, help="A persisted run id."),
+    experiment: str | None = typer.Option(None, "--experiment", help="Rescore every run of an experiment."),
+    results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir"),
+) -> None:
+    """Re-run scorers against stored evidence — no agent, no API spend.
+
+    The original result.json stays immutable; a scoring revision is written
+    to ``scoring_revisions/`` beside it and old-vs-new is printed.
+    """
+    from agentbench.rescore import rescore_run
+
+    targets: list[str] = []
+    if experiment:
+        index = _open_index(results_dir)
+        rows = index.query(experiment_id=experiment, limit=None)
+        targets = [str(r["run_id"]) for r in rows]
+        if not targets:
+            console.print(f"[red]No runs indexed for experiment {experiment}[/]")
+            raise typer.Exit(code=EXIT_ERROR)
+    elif run_id:
+        targets = [run_id]
+    else:
+        console.print("[red]Provide a RUN-ID or --experiment.[/]")
+        raise typer.Exit(code=EXIT_ERROR)
+
+    changed = 0
+    for rid in targets:
+        outcome = rescore_run(rid, results_root=Path(results_dir))
+        if outcome.error:
+            console.print(f"[yellow]{rid}: skipped[/] — {outcome.error}")
+            continue
+        same = (
+            (outcome.original_status == "passed") == outcome.new_resolved
+        )
+        verdict = "[green]unchanged[/]" if same else "[bold yellow]CHANGED[/]"
+        changed += 0 if same else 1
+        partial = (
+            f" · partial {outcome.partial_score:.3f}"
+            if outcome.partial_score is not None else ""
+        )
+        console.print(
+            f"{rid}: original={outcome.original_status} → "
+            f"resolved={outcome.new_resolved}{partial} · {verdict}\n"
+            f"  revision: {outcome.revision_path}"
+        )
+    if changed:
+        console.print(
+            f"[yellow]{changed} run(s) changed verdict under current scorers. "
+            f"Original evidence untouched.[/]"
+        )
+
+
+@app.command()
 def reproduce(
     run_id: str = typer.Argument(..., help="A persisted run id."),
     results_dir: str = typer.Option(DEFAULT_RESULTS_DIR, "--results-dir"),
@@ -1354,7 +1798,14 @@ def export(
         return
     rendered_or_path = write_export(rows, fmt=fmt, output=output)
     if output is None:
-        console.print(rendered_or_path)
+        # Machine-readable formats must never pass through the styled console:
+        # Rich wraps long lines at terminal width and corrupts CSV/JSON.
+        import sys as _sys
+
+        # Binary write avoids Windows text-mode translating the CSV's \r\n
+        # into \r\r\n (which parses as blank rows).
+        _sys.stdout.buffer.write(rendered_or_path.encode("utf-8"))
+        _sys.stdout.buffer.flush()
     else:
         console.print(f"Wrote {len(rows)} run(s) to [underline]{rendered_or_path}[/]")
 
@@ -1399,7 +1850,9 @@ def cleanup_workspaces(
     for target in targets:
         if apply:
             try:
-                shutil.rmtree(target)
+                from agentbench.workspace import remove_tree
+
+                remove_tree(target)
                 console.print(f"removed {target.name}")
             except OSError as exc:
                 console.print(f"[yellow]could not remove {target.name}: {exc}[/]")

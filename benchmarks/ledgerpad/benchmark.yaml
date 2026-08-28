@@ -1,40 +1,40 @@
 name: ledgerpad
 repository: fixture
 commit: 536c85ac7f07d8e8f0b17863bb32e24ce5ae696a
-description: |
-  An expense tracker accepts zero, negative, and unknown-currency expenses,
-  corrupting per-currency totals. Add proper validation at the single entry
-  point without breaking per-currency totals.
-prompt: |
-  Users of ledgerpad report corrupted totals: expenses with zero or negative
-  amounts are recorded (a "0" entry wipes out reconciliation), and expenses
-  typed with unknown or lowercase currency codes (e.g. "btc", "eur") are
-  accepted silently.
-
-  Make add_expense reject:
-  - non-positive amounts (ValueError), and
-  - currency codes not in VALID_CURRENCIES, compared case-insensitively
-    (ValueError).
-
-  Invalid expenses must not be recorded. Keep the existing per-currency
-  totals behavior working. The public test suite contains failing tests that
-  must pass when you are done.
+description: "An expense tracker accepts zero, negative, and unknown-currency expenses,\n\
+  corrupting per-currency totals. Add proper validation at the single entry\npoint\
+  \ without breaking per-currency totals.\n Provenance reviewed 2026-08-26: synthetic\
+  \ fixture repo authored in-repo by create_fixture generator; prompt written fresh\
+  \ for AgentBench; not drawn from any public dataset."
+prompt: "Users of ledgerpad report corrupted totals: expenses with zero or negative\n\
+  amounts are recorded (a \"0\" entry wipes out reconciliation), and expenses\ntyped\
+  \ with unknown or lowercase currency codes (e.g. \"btc\", \"eur\") are\naccepted\
+  \ silently.\n\nMake add_expense reject:\n- non-positive amounts (ValueError), and\n\
+  - currency codes not in VALID_CURRENCIES, compared case-insensitively\n  (ValueError).\n\
+  \nInvalid expenses must not be recorded. Keep the existing per-currency\ntotals\
+  \ behavior working. The public test suite contains failing tests that\nmust pass\
+  \ when you are done.\n"
 agent:
   type: claude-code
 evaluations:
-  - name: public-tests
-    command: '"{python}" -m pytest -q'
+- name: public-tests
+  command: '"{python}" -m pytest -q'
 hidden_evaluations:
   source: hidden
   evaluations:
-    - name: behavioral-checks
-      command: '"{python}" -m pytest -q'
+  - name: behavioral-checks
+    command: '"{python}" -m pytest -q'
 protected_paths:
-  - tests/**
+- tests/**
 fail_on_protected_path_violation: true
 category: bugfix
-tags: [validation, boundary]
-suites: [smoke, python-core, bugfix]
+tags:
+- validation
+- boundary
+suites:
+- smoke
+- python-core
+- bugfix
 language: python
 difficulty: easy
 expect_broken_baseline: true
@@ -42,3 +42,21 @@ reference_solution:
   patch: reference/fix.patch
 timeout_seconds: 600
 results_dir: results
+prompt_requirements:
+- id: R1
+  requirement: add_expense rejects non-positive amounts with ValueError and records
+    nothing
+- id: R2
+  requirement: Currency codes outside VALID_CURRENCIES are rejected, compared case-insensitively
+requirement_mappings:
+- requirement: R1
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'behavioral-checks'
+- requirement: R2
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'behavioral-checks'
+source_kind: authored
+task_created_at: '2026-08-23T00:00:00+00:00'
+contamination_risk: low

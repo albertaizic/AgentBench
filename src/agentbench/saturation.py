@@ -114,51 +114,57 @@ def _config_summary(label: str, rows: list[dict]) -> ConfigSaturation:
 
 def analyze_benchmark(benchmark: str, rows: list[dict], *, min_runs: int = MIN_RUNS_DEFAULT) -> BenchmarkSaturation:
     total = len(rows)
+    # Capability classification uses validly graded cells only; infra-invalid
+    # runs measure infrastructure, not task difficulty. They stay counted in
+    # ``total`` and are disclosed in the reason string.
+    graded = [r for r in rows
+              if r.get("validity") in (None, "", "valid")]
+    excluded = total - len(graded)
     by_config: dict[str, list[dict]] = {}
-    for row in rows:
+    for row in graded:
         label = str(row.get("config_name") or row.get("agent") or "default")
         by_config.setdefault(label, []).append(row)
     summaries = [_config_summary(label, group) for label, group in sorted(by_config.items())]
-    passes = sum(1 for r in rows if _passed(r))
-    overall = passes / total if total else None
+    passes = sum(1 for r in graded if _passed(r))
+    overall = passes / len(graded) if graded else None
 
     def verdict(classification: str, reason: str) -> BenchmarkSaturation:
+        if excluded:
+            reason += f" ({excluded} ungraded run(s) excluded)"
         return BenchmarkSaturation(
             benchmark=benchmark, total_runs=total,
             classification=classification, reason=reason,
             overall_pass_rate=overall, configs=summaries,
         )
 
-    if total < min_runs:
-        return verdict(CLASS_UNCALIBRATED, f"only {total} run(s); classification needs >= {min_runs}")
+    if len(graded) < min_runs:
+        return verdict(CLASS_UNCALIBRATED, f"only {len(graded)} graded run(s); classification needs >= {min_runs}")
 
     # Every config must itself carry enough evidence to be trusted as "always
     # passing" or "never passing"; single-run configs cannot anchor a verdict.
     trusted = [s for s in summaries if s.runs >= max(2, min_runs // 3)]
     if not trusted:
         return verdict(CLASS_UNCALIBRATED, "no configuration has enough paired evidence")
-
     never = all(s.passes == 0 for s in trusted)
     saturated = [s for s in trusted if s.pass_rate is not None and s.pass_rate >= SATURATION_RATE]
     rates = [s.pass_rate for s in trusted if s.pass_rate is not None]
 
     if never:
-        return verdict(CLASS_TOO_HARD, f"0/{total} passed across {len(trusted)} config(s)")
+        return verdict(CLASS_TOO_HARD, f"0/{len(graded)} graded passed across {len(trusted)} config(s)")
     if len(trusted) >= 2 and len(saturated) == len(trusted):
         return verdict(
             CLASS_SATURATED,
-            f"all {len(trusted)} trusted config(s) pass at >= {SATURATION_RATE:.0%} ({total} runs)",
+            f"all {len(trusted)} trusted config(s) pass at >= {SATURATION_RATE:.0%} ({len(graded)} graded runs)",
         )
     if len(rates) >= 2 and max(rates) - min(rates) >= DISCRIMINATION_GAP:
         return verdict(
             CLASS_DISCRIMINATING,
-            f"config pass-rate spread {min(rates):.0%}-{max(rates):.0%} "
-            f">= {DISCRIMINATION_GAP:.0%} across {total} runs",
+            f">= {DISCRIMINATION_GAP:.0%} across {len(graded)} graded runs",
         )
     return verdict(
         CLASS_UNCALIBRATED,
-        f"{total} runs, pass-rate spread under {DISCRIMINATION_GAP:.0%}; "
-        "no saturation/difficulty signal yet",
+        f"{len(graded)} graded runs, pass-rate spread under {DISCRIMINATION_GAP:.0%}; "
+        "no saturation/difficulty signal yet"
     )
 
 

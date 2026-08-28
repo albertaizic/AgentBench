@@ -1,0 +1,84 @@
+name: statelock
+repository: fixture
+commit: eafba4dcd419249f05f460e66f75204d90ee0702
+description: |
+  The order-lock state machine has an unlocked retry fast-path: resuming an
+  interrupted request jumps straight to the target state, skipping the
+  intermediate state's required side effect and never consulting the
+  transition guard — whose check itself only inspects the surface state
+  label instead of journal evidence. Skipped allocations therefore let
+  commits succeed that must be refused.
+prompt: |
+  Our order-lock service survived a crash drill, but the recovery audit
+  found locks in "committed" state with stock never allocated and finalize
+  effects missing from the journal. Two defects interact:
+
+  1. Retrying an interrupted request takes a shortcut that lands directly on
+     the target state. The intermediate state's required side effect is
+     skipped entirely (it never appears in the effect journal) and no guard
+     is consulted.
+  2. The transition guard only compares state labels, so it cannot detect
+     that required evidence (e.g. a journaled stock allocation before any
+     commit) is missing.
+
+  Required observable behavior after the fix:
+  - Completing any transition (via process OR retry) journals its required
+    side effect exactly once for the driving request id, and the guard
+    verifies journal evidence before entering "committed" — a machine that
+    cannot show allocation evidence must refuse to commit with a guard
+    violation, leaving state and journal untouched.
+  - Idempotent retries are preserved: replaying a completed request id (via
+    process or retry) returns the original outcome and runs no new effects,
+    no matter how many times it is repeated.
+  - Resuming an interrupted request completes the interrupted pipeline
+    through the guarded path: missing intermediate effects run exactly once
+    and the terminal state is only reached legitimately.
+  - Illegal requests (unknown actions, actions from states that cannot start
+    or resume them) keep raising MachineError without mutating anything.
+
+  The failing public tests pin this contract; hidden acceptance checks use
+  different request sequences. Do not modify files under tests/.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: '"{python}" -m pytest -q'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  consistency: {weight: 0.2, required: true}
+  edge_cases: {weight: 0.2, required: false}
+  diagnostics: {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: transition-contract
+      command: '"{python}" -m pytest -q'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: state-management
+tags: [state-machine, guards, idempotency, long-horizon]
+suites: [long-horizon]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "Retrying an interrupted request runs the skipped intermediate side effect exactly once via the guarded path."}
+  - {id: req-2, text: "Committing requires journaled allocation evidence; refusals leave state and journal untouched."}
+  - {id: req-3, text: "Replays of completed request ids return the recorded outcome and run no new effects."}
+  - {id: req-4, text: "Illegal requests raise MachineError without mutation."}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["consistency"]}
+  - {requirement: req-3, scored_by: ["edge_cases"]}
+  - {requirement: req-4, scored_by: ["diagnostics"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

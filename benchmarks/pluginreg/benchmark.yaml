@@ -1,0 +1,77 @@
+name: pluginreg
+repository: fixture
+commit: db4c7757c8445d3ff2681b7f05775ebee0dcf5f5
+description: |
+  The plugin registry regressed in two ways: register() rejects any plugin
+  whose dependencies are not yet registered, making manifest order
+  significant even though activation order is computed later; and
+  duplicate-name detection compares raw display names only, so plugins whose
+  names differ just by letter case both register and shadow each other.
+prompt: |
+  Two compatibility regressions slipped into the plugin registry and the
+  platform team is blocking our next release on them:
+
+  1. Registration is now order-dependent. A manifest that lists a dependent
+     before its dependency fails with "requires unregistered plugin" even
+     though the dependency appears later in the same manifest. Plugins
+     should be registrable in ANY order; dependency problems (a truly
+     missing plugin, or a cycle) must surface when activation order is
+     resolved, not at registration time.
+  2. Duplicate-name detection no longer catches case variants. Registering
+     "cache" and then "Cache" produces two live plugins where one shadows
+     the other. Names must be unique after normalization (surrounding
+     whitespace stripped, case folded), for both registration dedup AND
+     dependency edges — a requirement written as " Cache " or "CACHE" must
+     bind to the registered "cache" plugin.
+
+  Existing guarantees that must keep working: deterministic topological
+  activation order (ties broken by registration order), hooks attaching in
+  activation order, and clear errors naming the offending plugin for
+  duplicates, unknown dependencies, and cycles.
+
+  The failing public tests pin this contract; hidden acceptance checks use
+  different plugin graphs. Do not modify files under tests/.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: '"{python}" -m pytest -q'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.2, required: true}
+  edge_cases: {weight: 0.2, required: false}
+  diagnostics: {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: registry-contract
+      command: '"{python}" -m pytest -q'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: compatibility
+tags: [plugins, dependency-resolution, registry, long-horizon]
+suites: [long-horizon]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "Plugins can be registered in any order regardless of dependency direction."}
+  - {id: req-2, text: "Duplicate detection and dependency binding are insensitive to case and surrounding whitespace."}
+  - {id: req-3, text: "Missing dependencies and cycles still produce errors at activation-order resolution, naming the offenders."}
+  - {id: req-4, text: "Deterministic topological activation order and hook attachment behavior are preserved."}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["compatibility"]}
+  - {requirement: req-3, scored_by: ["edge_cases"]}
+  - {requirement: req-4, scored_by: ["core_behavior"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

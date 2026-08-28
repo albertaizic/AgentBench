@@ -1,0 +1,76 @@
+name: schemamigrate
+repository: fixture
+commit: 039ce3cef95c6a6d2b312a996c022c8f1a875887
+description: |
+  Configuration document serializer ignores the parsed layout version on
+  write: every document is re-emitted in the v2 nested layout regardless of
+  how it was loaded, so v1 tenant files are silently upgraded and the
+  unmodelled settings collected in the document's extras bag are dropped.
+  Fixing it requires coordinated changes across parser (auto-detection),
+  model (versioned document state), compat (flat/nested converters) and the
+  serializer write path, preserving lossless round trips for both layouts.
+prompt: |
+  Our service stores tenant configuration as JSON documents in two on-disk
+  layouts. The legacy v1 layout is a flat mapping of dotted keys with no
+  version marker; the current v2 layout marks itself with "version": 2 and
+  nests settings under section names. The loader already auto-detects both
+  layouts, including strict detection (only an exact integer version marker
+  counts).
+
+  Tenants on old tooling have reported that simply loading and re-saving a
+  configuration file corrupts it for their readers. Loading and saving any
+  document must now be lossless:
+
+  - A v1 document must round-trip back as v1 - saving must never silently
+    upgrade the layout; converting to v2 stays an explicit, opt-in step via
+    the existing upgrade helper.
+  - Settings our schema does not model (unknown sections, free-form keys)
+    must survive load/save cycles exactly.
+  - Repeated load/save cycles must not drift: the document after N cycles
+    equals the document after one.
+
+  The public tests pin this observable contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: '"{python}" -m pytest -q'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.2, required: true}
+  edge_cases:    {weight: 0.2, required: false}
+  diagnostics:   {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: version-contract
+      command: '"{python}" -m pytest -q'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: migration
+tags: [config, schema, serialization, backward-compat]
+suites: [long-horizon]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "Loading and saving a v1 (flat, unmarked) document yields a v1 document again - the write path never auto-upgrades the layout."}
+  - {id: req-2, text: "Settings outside the known schema survive load/save cycles for both v1 and v2 documents."}
+  - {id: req-3, text: "Round trips are idempotent: repeated load/save cycles produce equal documents every time."}
+  - {id: req-4, text: "Version detection stays strict: only an exact integer 2 version marker selects the v2 layout."}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["compatibility", "edge_cases"]}
+  - {requirement: req-3, scored_by: ["core_behavior"]}
+  - {requirement: req-4, scored_by: ["edge_cases"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

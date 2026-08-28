@@ -50,6 +50,9 @@ class RunResult(BaseModel):
     workspace_kept: bool = False
     workspace_path: str | None = None
     stage_timings: dict[str, float] | None = None  # per-phase wall-clock seconds
+    # v0.6 P8/P9: structured scorer breakdown + partial credit. Absent on
+    # historical runs, which remain valid without it.
+    scoring: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

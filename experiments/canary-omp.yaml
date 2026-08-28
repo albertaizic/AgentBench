@@ -1,0 +1,16 @@
+name: canary-omp
+# Single-cell integration canary for the OMP adapter (v0.6).
+benchmarks:
+  - ledgerpad
+configs:
+  - name: omp-canary
+    agent:
+      type: omp
+      model: stealth/ox-alpha
+      provider: openrouter
+      reasoning: medium
+repeat: 1
+execution:
+  backend: host
+results_dir: results
+comparison_mode: system-comparison

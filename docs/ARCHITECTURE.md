@@ -69,6 +69,14 @@ statistics speak.
 | Query layer | `storage.py` | only module with SQL; derived index |
 | Aggregation | `aggregate.py` | medians, Wilson intervals, pairwise counts |
 | Views | `dashboard.py`, `cli.py` | read-only over the index |
+| Comparison intent | `models.py` + `experiments.py` | `comparison_mode` validated at load (model-controlled requires one harness; scaffold equivalence warns) and persisted in manifests |
+| Trajectories | `trajectories.py` | normalized, privacy-aware event stream per run (`trajectory.jsonl`); reasoning dropped at parse time |
+| Scoring | `scoring.py` | scorer abstraction, weighted groups, partial credit; binary resolution unchanged |
+| Rescoring | `rescore.py` | re-run scorers on stored patch vs fresh fixture; immutable revision sidecars |
+| Task quality | `audit.py` | oracle/nop stability, requirement mapping, provenance, quality statuses |
+| Integrity scanners | `integrity.py` | deterministic reward-hacking flags (WARN/FAIL) over diff/commands/trajectory |
+| Reliability & horizon | `reliability.py` | observed pass@1/any-in-k/all-k + logistic H50/H80 with refusal on thin data |
+| Recovery analysis | `recovery.py` | first-attempt vs recovery classification from trajectories |
 
 ## Data flow: single host run
 

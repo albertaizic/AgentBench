@@ -1,0 +1,104 @@
+diff --git a/cacheflow/service.py b/cacheflow/service.py
+index a4b2f1c..75da8b2 100644
+--- a/cacheflow/service.py
++++ b/cacheflow/service.py
+@@ -1,8 +1,4 @@
+-"""Cached service layer over the record repository.
+-
+-Reads are served through a NamespaceCache; every repository mutation must
+-keep the cache coherent with repository truth.
+-"""
++"""Cached service layer over the record repository (generation-stamp coherence)."""
+ 
+ from __future__ import annotations
+ 
+@@ -20,6 +16,24 @@ class RecordService:
+     def __init__(self, repository: RecordRepository, cache: NamespaceCache) -> None:
+         self._repo = repository
+         self._cache = cache
++        self._owner_generations: dict[str, int] = {}
++        self._status_generations: dict[str, int] = {}
++
++    # -- generations -------------------------------------------------------
++
++    def _bump(self, *, owner: str, status: str) -> None:
++        self._owner_generations[owner] = self._owner_generations.get(owner, 0) + 1
++        self._status_generations[status] = self._status_generations.get(status, 0) + 1
++
++    def _bump_owner(self, owner: str) -> None:
++        self._owner_generations[owner] = self._owner_generations.get(owner, 0) + 1
++
++    def _bump_status(self, status: str) -> None:
++        self._status_generations[status] = self._status_generations.get(status, 0) + 1
++
++    @staticmethod
++    def _stale(generations: dict[str, int], key: str, stamp) -> bool:
++        return generations.get(key, 0) != stamp
+ 
+     # -- reads -------------------------------------------------------------
+ 
+@@ -32,27 +46,30 @@ class RecordService:
+ 
+     def list_by_owner(self, owner: str) -> list[str]:
+         hit = self._cache.get(OWNER_LIST, owner, default=_MISS)
+-        if hit is _MISS:
+-            hit = tuple(r.record_id for r in self._repo.by_owner(owner))
+-            self._cache.set(OWNER_LIST, owner, value=hit)
+-        return list(hit)
++        if isinstance(hit, tuple) and len(hit) == 2 \
++                and not self._stale(self._owner_generations, owner, hit[0]):
++            return list(hit[1])
++        fresh = tuple(r.record_id for r in self._repo.by_owner(owner))
++        self._cache.set(OWNER_LIST, owner,
++                        value=(self._owner_generations.get(owner, 0), fresh))
++        return list(fresh)
+ 
+     def list_by_status(self, status: str) -> list[str]:
+         hit = self._cache.get(STATUS_LIST, status, default=_MISS)
+-        if hit is _MISS:
+-            hit = tuple(r.record_id for r in self._repo.by_status(status))
+-            self._cache.set(STATUS_LIST, status, value=hit)
+-        return list(hit)
++        if isinstance(hit, tuple) and len(hit) == 2 \
++                and not self._stale(self._status_generations, status, hit[0]):
++            return list(hit[1])
++        fresh = tuple(r.record_id for r in self._repo.by_status(status))
++        self._cache.set(STATUS_LIST, status,
++                        value=(self._status_generations.get(status, 0), fresh))
++        return list(fresh)
+ 
+     # -- mutations ---------------------------------------------------------
+ 
+     def create_record(self, *, record_id: str, owner: str, status: str, payload: str = "") -> Record:
+         record = self._repo.add(record_id=record_id, owner=owner, status=status, payload=payload)
+-        # BUG: mutations refresh only their primary-key entry. The derived
+-        # owner/status list views keyed by composite keys keep serving
+-        # pre-mutation membership.
+-        self._cache.invalidate(RECORD_DETAIL, record_id)
+         self._cache.set(RECORD_DETAIL, record_id, value=record)
++        self._bump(owner=owner, status=status)
+         return record
+ 
+     def update_record(
+@@ -65,13 +82,18 @@ class RecordService:
+     ) -> Record:
+         before = self._repo.require(record_id)
+         updated = self._repo.update(record_id, owner=owner, status=status, payload=payload)
+-        # BUG: only the primary-key entry is invalidated here; owner/status
+-        # list caches keep serving stale snapshots.
+         self._cache.invalidate(RECORD_DETAIL, record_id)
++        if updated.owner != before.owner:
++            self._bump_owner(before.owner)
++        self._bump_owner(updated.owner)
++        if updated.status != before.status:
++            self._bump_status(before.status)
++        self._bump_status(updated.status)
+         return updated
+ 
+     def delete_record(self, record_id: str) -> Record:
+         record = self._repo.delete(record_id)
+-        # BUG: same as above - derived list views stay stale after deletion.
+         self._cache.invalidate(RECORD_DETAIL, record_id)
++        self._bump_owner(record.owner)
++        self._bump_status(record.status)
+         return record

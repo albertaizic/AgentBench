@@ -1,0 +1,73 @@
+name: apimigrate
+repository: fixture
+commit: 681c70f9bd8831f973d2abc884ab94ed4444cefa
+description: |
+  Mid-flight SDK migration: fetch_user_profile was split into fetch_user and
+  fetch_preferences with a deprecated combined shim, but every internal
+  caller (three modules) and the external-facing facade still funnel through
+  the deprecated path, and the shim emits a DeprecationWarning on every call
+  instead of at most once per calling module per client instance.
+prompt: |
+  We publish a profile SDK. In the last release the combined
+  fetch_user_profile() method was superseded by two finer methods,
+  fetch_user() and fetch_preferences(); the old method remains as a
+  deprecated shim so external integrations keep working.
+
+  Finishing the migration requires three observable outcomes:
+
+  1. All internal modules (the notification, billing, and reporting callers)
+     and the account facade must stop using the deprecated method - internal
+     flows must run clean when DeprecationWarnings are escalated to errors.
+     They must produce exactly the same outputs as before.
+  2. The facade must expose the split API (fetch_user / fetch_preferences
+     passthroughs) and build its overview by composing the two new methods.
+  3. The deprecated shim keeps returning the same combined payload for
+     external users, but warns at most once per calling module per client
+     instance - repeated calls from the same module stay quiet after the
+     first warning, while a newly created client instance warns again.
+
+  The public tests pin this contract.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: '"{python}" -m pytest -q'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.2, required: true}
+  edge_cases:    {weight: 0.2, required: false}
+  diagnostics:   {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: migration-contract
+      command: '"{python}" -m pytest -q'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: api-change
+tags: [deprecation, api-migration, warnings, facade]
+suites: [long-horizon]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "Internal caller modules and the facade run without emitting DeprecationWarnings and keep their exact previous outputs."}
+  - {id: req-2, text: "The facade exposes fetch_user/fetch_preferences passthroughs and composes its overview from the split API."}
+  - {id: req-3, text: "The deprecated shim still returns the combined payload."}
+  - {id: req-4, text: "The shim warns at most once per calling module per client instance; a fresh client instance warns again."}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["core_behavior"]}
+  - {requirement: req-3, scored_by: ["compatibility"]}
+  - {requirement: req-4, scored_by: ["edge_cases", "diagnostics"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

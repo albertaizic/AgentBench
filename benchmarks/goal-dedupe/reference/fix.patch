@@ -1,0 +1,34 @@
+diff --git a/ingest/pipeline.py b/ingest/pipeline.py
+index b3a1fc1..47d46f9 100644
+--- a/ingest/pipeline.py
++++ b/ingest/pipeline.py
+@@ -25,19 +25,24 @@ class Pipeline:
+ 
+     def __init__(self, store: RecordStore | None = None) -> None:
+         self.store = store if store is not None else RecordStore()
++        # FIX: dedupe state lives for the pipeline's lifetime instead of a
++        # single batch, and the shared result store is consulted too so a
++        # record id is executed exactly once no matter which pipeline,
++        # batch, or load pattern reaches it first.
++        self._deduper = Deduper()
+ 
+     def submit(self, records: list[Record]) -> list[str]:
+-        # BUG: dedupe state is recreated per submission, so cross-batch
+-        # repeats of a record id are re-executed instead of short-circuited.
+-        deduper = Deduper()
+         outputs: list[str] = []
+         for record in records:
+-            if deduper.already_processed(record.record_id):
++            already = self._deduper.already_processed(record.record_id) or self.store.has(
++                record.record_id
++            )
++            if already:
+                 outputs.append(self.store.get(record.record_id, ""))
+                 continue
+             self.store.note_execution(record.record_id)
+             value = process_record(record)
+             self.store.save(record.record_id, value)
+-            deduper.mark_processed(record.record_id)
++            self._deduper.mark_processed(record.record_id)
+             outputs.append(value)
+         return outputs

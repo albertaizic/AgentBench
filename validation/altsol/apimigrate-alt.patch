@@ -1,0 +1,125 @@
+diff --git a/apimigrate/caller_a.py b/apimigrate/caller_a.py
+index fb20251..afb4f5e 100644
+--- a/apimigrate/caller_a.py
++++ b/apimigrate/caller_a.py
+@@ -1,4 +1,4 @@
+-"""Notification module - builds digest footers from profile data."""
++"""Caller A: reporting helpers."""
+ 
+ from __future__ import annotations
+ 
+@@ -6,7 +6,6 @@ from .client import ProfileClient
+ 
+ 
+ def digest_footer(client: ProfileClient, user_id: str) -> str:
+-    # BUG: still on the deprecated combined path.
+-    profile = client.fetch_user_profile(user_id)
+-    preferences = profile["preferences"]
+-    return f"-- {profile['name']} <{profile['email']}> ({preferences['locale']})"
++    user = client.fetch_user(user_id)
++    preferences = client.fetch_preferences(user_id)
++    return f"-- {user['name']} <{user['email']}> ({preferences['locale']})"
+diff --git a/apimigrate/caller_b.py b/apimigrate/caller_b.py
+index 154a59b..04e3e6e 100644
+--- a/apimigrate/caller_b.py
++++ b/apimigrate/caller_b.py
+@@ -1,4 +1,4 @@
+-"""Billing module - labels invoices with profile attributes."""
++"""Caller B: invoicing views."""
+ 
+ from __future__ import annotations
+ 
+@@ -6,9 +6,6 @@ from .client import ProfileClient
+ 
+ 
+ def invoice_label(client: ProfileClient, user_id: str) -> dict:
+-    # BUG: still on the deprecated combined path.
+-    profile = client.fetch_user_profile(user_id)
+-    return {
+-        "bill_to": profile["email"],
+-        "plan_theme": profile["preferences"]["theme"],
+-    }
++    user = client.fetch_user(user_id)
++    preferences = client.fetch_preferences(user_id)
++    return {"bill_to": user["email"], "plan_theme": preferences["theme"]}
+diff --git a/apimigrate/caller_c.py b/apimigrate/caller_c.py
+index 5ec8e24..ce9a08e 100644
+--- a/apimigrate/caller_c.py
++++ b/apimigrate/caller_c.py
+@@ -1,4 +1,4 @@
+-"""Reporting module - exports flat rows into the warehouse."""
++"""Caller C: export rows."""
+ 
+ from __future__ import annotations
+ 
+@@ -6,6 +6,6 @@ from .client import ProfileClient
+ 
+ 
+ def export_row(client: ProfileClient, user_id: str) -> list:
+-    # BUG: still on the deprecated combined path.
+-    profile = client.fetch_user_profile(user_id)
+-    return [profile["id"], profile["name"], profile["preferences"]["newsletter"]]
++    user = client.fetch_user(user_id)
++    preferences = client.fetch_preferences(user_id)
++    return [user["id"], user["name"], preferences["newsletter"]]
+diff --git a/apimigrate/client.py b/apimigrate/client.py
+index 3e3d3aa..a69afcc 100644
+--- a/apimigrate/client.py
++++ b/apimigrate/client.py
+@@ -16,9 +16,7 @@ from .directory import DIRECTORY, lookup
+ class ProfileClient:
+     def __init__(self, backend: dict | None = None) -> None:
+         self._backend = backend if backend is not None else DIRECTORY
+-        # BUG: deprecation bookkeeping is missing entirely - see
+-        # fetch_user_profile below.
+-        pass
++        self._warned_callers: set[str] = set()
+ 
+     def fetch_user(self, user_id: str) -> dict:
+         entry = self._backend.get(user_id) or lookup(user_id)
+@@ -30,14 +28,16 @@ class ProfileClient:
+ 
+     def fetch_user_profile(self, user_id: str) -> dict:
+         """Deprecated: combined profile view. Kept for external integrations."""
+-        # BUG: this shim warns on EVERY call instead of at most once per
+-        # calling module per client instance.
+-        warnings.warn(
+-            "fetch_user_profile() is deprecated; use fetch_user() and "
+-            "fetch_preferences() instead",
+-            DeprecationWarning,
+-            stacklevel=2,
+-        )
++        frame = sys._getframe(1)
++        caller = frame.f_code.co_filename
++        if caller not in self._warned_callers:
++            self._warned_callers.add(caller)
++            warnings.warn(
++                "fetch_user_profile() is deprecated; use fetch_user() and "
++                "fetch_preferences() instead",
++                DeprecationWarning,
++                stacklevel=2,
++            )
+         user = self.fetch_user(user_id)
+         preferences = self.fetch_preferences(user_id)
+         return {**user, "preferences": preferences}
+diff --git a/apimigrate/facade.py b/apimigrate/facade.py
+index aa533e1..9c2e3e9 100644
+--- a/apimigrate/facade.py
++++ b/apimigrate/facade.py
+@@ -9,7 +9,13 @@ class AccountFacade:
+     def __init__(self, client: ProfileClient | None = None) -> None:
+         self._client = client if client is not None else ProfileClient()
+ 
++    def fetch_user(self, user_id: str) -> dict:
++        return self._client.fetch_user(user_id)
++
++    def fetch_preferences(self, user_id: str) -> dict:
++        return self._client.fetch_preferences(user_id)
++
+     def account_overview(self, user_id: str) -> dict:
+-        # BUG: still funnels through the deprecated combined method instead
+-        # of composing the split API.
+-        return self._client.fetch_user_profile(user_id)
++        overview = self.fetch_user(user_id)
++        overview["preferences"] = self.fetch_preferences(user_id)
++        return overview

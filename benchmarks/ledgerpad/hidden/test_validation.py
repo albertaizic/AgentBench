@@ -23,3 +23,17 @@ def test_unknown_currency_rejected_case_insensitively():
         tracker.add_expense("abroad", 100, currency="btc")
     with pytest.raises(ValueError):
         tracker.add_expense("abroad", 100, currency="Yen")
+
+
+def test_lowercase_valid_currency_is_accepted_and_normalized():
+    # Case-INSENSITIVE comparison means a valid code in any casing is
+    # accepted (and normalized), not merely not-rejected. Catches
+    # "fixes" that drop the case-folding entirely.
+    tracker = ExpenseTracker()
+    tracker.add_expense("abroad", 250, currency="eur")
+    assert tracker.expenses[-1].currency == "EUR"
+    assert tracker.total_cents("EUR") == 250
+
+    mixed = ExpenseTracker()
+    mixed.add_expense("cafe", 75, currency="Eur")
+    assert mixed.expenses[-1].currency == "EUR"

@@ -83,3 +83,70 @@ def classify_run(
             stage=STAGE_AGENT,
         )
     return Classification(EVALUATION_FAILED, "one or more evaluations failed", stage=STAGE_EVALUATION)
+
+
+# Outcome (did the task pass?) and validity (may the evidence be graded?)
+# are orthogonal. A provider outage yields outcome=failed/agent_failed with
+# validity=infra_invalid: the cell happened, but it measures infrastructure,
+# not capability, and must be excluded from capability denominators while
+# staying visible in reports.
+VALIDITY_VALID = "valid"
+VALIDITY_INFRA_INVALID = "infra_invalid"
+VALIDITY_INTEGRITY_WARNING = "integrity_warning"
+VALIDITY_INVALID = "invalid"
+ALL_VALIDITIES = (
+    VALIDITY_VALID,
+    VALIDITY_INFRA_INVALID,
+    VALIDITY_INTEGRITY_WARNING,
+    VALIDITY_INVALID,
+)
+
+# Deterministic provider-outage evidence. Matched case-insensitively against
+# captured agent output; every pattern was observed in real v0.5 run logs.
+_INFRA_EVIDENCE_PATTERNS = (
+    "http 429",
+    "429: ",
+    "http 408",
+    "408: ",
+    "http 500",
+    "500: ",
+    "http 502",
+    "502: ",
+    "http 503",
+    "503: ",
+    "rate limit",
+    "rate-limit",
+    "session limit",
+    "quota",
+    "api call failed after",
+    "insufficient_quota",
+    "overloaded_error",
+    "provider returned error",
+    # Transport-level failures observed between harness and provider.
+    "bad gateway",
+    "service unavailable",
+    "connection reset",
+    "connection refused",
+    "name resolution",
+    "getaddrinfo",
+)
+
+
+def classify_validity(
+    *,
+    agent_stdout: str | None,
+    agent_stderr: str | None,
+    total_tokens: int | None,
+) -> str:
+    """Grade whether a finished run's evidence measures agent capability.
+
+    Conservative by design: an outage signal only invalidates a cell when
+    the agent produced no tokens at all — i.e. it never reached a model.
+    Runs that did real work before hitting an outage keep ``valid``; their
+    outcome already reflects whatever partial capability they demonstrated.
+    """
+    combined = f"{agent_stdout or ''}\n{agent_stderr or ''}".lower()
+    infra_hit = any(pattern in combined for pattern in _INFRA_EVIDENCE_PATTERNS)
+    if infra_hit and total_tokens in (None, 0):
+        return VALIDITY_INFRA_INVALID
+    return VALIDITY_VALID

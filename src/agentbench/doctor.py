@@ -88,7 +88,18 @@ def run_checks(results_dir: Path) -> list[Check]:
             Check("Hermes agent", WARN, "hermes CLI not found on PATH (host backend only)")
         )
 
-    for adapter_type in ("claude-code", "command", "hermes"):
+    omp_path = shutil.which("omp")
+    if omp_path:
+        version = _first_line(["omp", "--version"])
+        checks.append(
+            Check("OMP agent", OK, version or "installed (JSON-streaming coding agent)")
+        )
+    else:
+        checks.append(
+            Check("OMP agent", WARN, "omp CLI not found on PATH (host backend only)")
+        )
+
+    for adapter_type in ("claude-code", "command", "hermes", "omp"):
         try:
             get_adapter(adapter_type)
             checks.append(Check(f"Adapter '{adapter_type}'", OK, "available"))

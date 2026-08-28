@@ -101,3 +101,28 @@ class TestFormatters:
         assert format_percent(None) == "—"
         assert format_percent(0.9) == "90%"
         assert format_percent(2 / 3) == "67%"
+
+
+def test_config_name_label_preferred_over_agent_type():
+    """Two command configs must not collapse into one ambiguous label."""
+    rows = [
+        {"config_hash": "h1", "agent": "command", "model": None,
+         "config_name": "noop-agent", "status": "passed"},
+        {"config_hash": "h2", "agent": "command", "model": None,
+         "config_name": "fail-fast", "status": "evaluation_failed"},
+    ]
+
+    groups = {g.label: g for g in aggregate_by_config(rows)}
+
+    assert set(groups) == {"noop-agent", "fail-fast"}
+
+
+def test_agent_model_label_fallback_without_config_name():
+    rows = [
+        {"config_hash": "h1", "agent": "claude-code", "model": "sonnet",
+         "status": "passed"},
+    ]
+
+    groups = aggregate_by_config(rows)
+
+    assert groups[0].label == "claude-code/sonnet"

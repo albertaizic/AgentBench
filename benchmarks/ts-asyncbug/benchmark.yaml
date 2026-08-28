@@ -1,0 +1,71 @@
+name: ts-asyncbug
+repository: fixture
+commit: 9b1fd8332a734c96b6998f259a3043ba1e14fc44
+description: |
+  A job queue dispatches handler promises without awaiting or tracking them,
+  so completion bookkeeping lands after callers observe the queue and jobs are
+  lost across close(); the pipeline layer compounds this by reading stale
+  counters, never retrying failures, and reporting zero processed jobs.
+prompt: |
+  Our taskpipe package (src/) keeps dropping work under load. Ops dashboards
+  show batches where every handler actually ran, yet the pipeline report says
+  nothing was processed, and shutting a queue down right after a flush makes
+  some outcomes vanish entirely.
+
+  Restored contract, pinned by the failing tests in tests/:
+
+  - After `queue.flush()` resolves, every job it dispatched must already be
+    accounted for: `queue.stats.completed`/`failed` are up to date and
+    `queue.results` holds an outcome for each job.
+  - Handler exceptions are recorded as failures (with the error), and jobs
+    with no registered kind fail explicitly instead of disappearing.
+  - `runPipeline` reports accurate totals (`succeeded` + `failed.length` equals
+    the number of submitted jobs) and genuinely retries failed jobs up to
+    `maxAttempts` total tries.
+  - Closing a queue is safe: `close()` waits until no dispatched work is
+    unresolved, later enqueues are rejected and counted as dropped, and no
+    job that was accepted before close loses its outcome.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: 'node run_tests.mjs'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.2, required: true}
+  edge_cases: {weight: 0.2, required: false}
+  diagnostics: {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: pipeline-contract
+      command: 'node "{hidden_dir}/pipeline_contract.test.mjs" "{workspace}"'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [typescript, async, concurrency, queue]
+suites: [typescript]
+language: typescript
+difficulty: medium
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+results_dir: results
+# ---- v0.6 metadata ----
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "flush() resolution implies all dispatched outcomes are recorded in stats/results"}
+  - {id: req-2, text: "runPipeline accounts for every submitted job (succeeded + failed == total) and retries failures up to maxAttempts"}
+  - {id: req-3, text: "close() waits for in-flight work; post-close enqueues are explicit drops"}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["core_behavior", "diagnostics"]}
+  - {requirement: req-3, scored_by: ["compatibility"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

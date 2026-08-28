@@ -1,0 +1,18 @@
+name: omp-calibration
+# P2 validation: three permanent benchmarks through the OMP adapter.
+benchmarks:
+  - jobqueue
+  - iniforge
+  - tokenbucket
+configs:
+  - name: omp
+    agent:
+      type: omp
+      model: stealth/ox-alpha
+      provider: openrouter
+      reasoning: medium
+repeat: 1
+execution:
+  backend: host
+results_dir: results
+comparison_mode: system-comparison

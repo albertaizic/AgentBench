@@ -1,0 +1,15 @@
+diff --git a/statelock/machine.py b/statelock/machine.py
+index 6bfb03a..d6487b0 100644
+--- a/statelock/machine.py
++++ b/statelock/machine.py
+@@ -78,6 +78,10 @@ class StateMachine:
+         action = self._journal.intent_for(request_id)
+         if action is None:
+             raise MachineError(f"no interrupted request: {request_id}")
++        self._state = ACTION_TARGET[action]
++        outcome = Outcome(request_id=request_id, action=action, state=self._state)
++        self._journal.record_outcome(request_id, outcome)
++        return outcome
+         # Unlocked fast-path: skip the pipeline entirely and land on the
+         # target state, running neither its side effect nor its guard.
+         self._state = ACTION_TARGET[action]

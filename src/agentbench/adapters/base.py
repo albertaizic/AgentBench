@@ -61,6 +61,11 @@ class AgentAdapter(ABC):
     CAP_SESSION_ID = "session_id"
     CAP_TOOL_CALL_COUNT = "tool_call_count"
     CAP_NATIVE_JSON_OUTPUT = "native_json_output"
+    # P39: an adapter declares these ONLY if the harness can interrupt
+    # itself mid-run when a budget is exceeded. Requested budgets are always
+    # recorded; enforcement is never assumed.
+    CAP_TOKEN_BUDGET_ENFORCEMENT = "token_budget_enforcement"
+    CAP_COST_BUDGET_ENFORCEMENT = "cost_budget_enforcement"
 
     @abstractmethod
     def build_invocation(self, *, workspace: Path, prompt: str, agent_spec: AgentSpec) -> AgentInvocation:

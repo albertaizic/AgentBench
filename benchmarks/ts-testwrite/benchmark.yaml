@@ -1,0 +1,85 @@
+name: ts-testwrite
+repository: fixture
+commit: 92a1062850de76c175cd910e1d775c16e314010d
+description: |
+  duracore's duration module is undocumented and untested. The agent must
+  reverse-engineer its observable behavior and write a test suite that passes
+  on the pristine implementation while killing a hidden panel of seeded
+  mutants; scoring is the fraction of mutants killed (partial credit).
+prompt: |
+  The duracore package ships src/duration.js — three exported helpers used by
+  src/budget.js and tools/estimate.js — with no documentation and, crucially,
+  no tests. Regressions keep slipping through because nothing pins the
+  module's behavior down.
+
+  Your job: write a regression suite under tests/ (any number of files named
+  tests/*.test.mjs) that captures what the module actually does today:
+
+  - parseDuration: which textual forms are accepted (single units,
+    compound expressions, whitespace, signs), how they convert to
+    milliseconds, and every way invalid input is rejected.
+  - formatDuration: canonical output shapes, including zero, exact unit
+    multiples, mixed remainders, and negative inputs.
+  - clampDuration: behavior inside, at, and beyond each bound, plus how
+    absent bounds behave.
+  - Anything else observable from outside (error types/messages thrown to
+    callers, including via buildBudget in src/budget.js).
+
+  Constraints:
+  - The suite must PASS against the current sources (`node run_tests.mjs`
+  from the repo root). A suite that fails on clean code scores zero.
+  - Do not modify anything under src/ or tools/ — only tests/ may change.
+  - The suite will be replayed against mutated variants of the module;
+  credit is proportional to the share of behavioral regressions your tests
+  catch. Think adversarially: off-by-ones, boundary inclusivity, sign
+  handling, error paths.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: 'node run_tests.mjs'
+scoring_groups:
+  test-suite: {weight: 0.25, required: true}
+  mutant-killing: {weight: 0.75, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: mutant-panel-integrity
+      command: 'node "{hidden_dir}/verify_panel.mjs" "{workspace}"'
+protected_paths:
+  - src/**
+  - tools/**
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [typescript, test-writing, mutation-testing, characterization]
+suites: [typescript]
+language: typescript
+difficulty: hard
+expect_broken_baseline: true
+timeout_seconds: 900
+results_dir: results
+# ---- v0.6 metadata ----
+scorers:
+  - id: suite-passes-on-pristine-source
+    command: 'node run_tests.mjs'
+    score_type: binary
+    required: true
+    groups: [test-suite]
+  - id: mutant-killing-fraction
+    command: 'node "{hidden_dir}/score_mutants.mjs" "{workspace}"'
+    score_type: fraction
+    required: false
+    groups: [mutant-killing]
+prompt_requirements:
+  - {id: req-1, text: "suite lives under tests/*.test.mjs, runs green via node run_tests.mjs on pristine sources"}
+  - {id: req-2, text: "suite detects seeded behavioral regressions across parsing, formatting, clamping, and error paths"}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["test-suite"]}
+  - {requirement: req-2, scored_by: ["mutant-killing"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

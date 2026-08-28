@@ -1,0 +1,29 @@
+name: v06-calibration
+# P51: single-trial real-agent calibration over every NEW v0.6 task.
+# Purpose: interpretable-evidence gate before promotion. Failures here are
+# inspected manually (trajectory + evaluator logs) before any benchmark is
+# promoted; this is calibration, not a headline study.
+comparison_mode: system-comparison
+benchmarks:
+  - schemamigrate
+  - cacheflow
+  - apimigrate
+  - txnrollback
+  - pluginreg
+  - statelock
+  - goal-dedupe
+  - cleanroom-ratelimit
+  - ts-apirefact
+  - ts-asyncbug
+  - ts-serialcompat
+configs:
+  - name: hermes-ox-alpha
+    agent:
+      type: hermes
+      model: stealth/ox-alpha
+      provider: openrouter
+      reasoning: medium
+repeat: 1
+execution:
+  backend: host
+results_dir: results

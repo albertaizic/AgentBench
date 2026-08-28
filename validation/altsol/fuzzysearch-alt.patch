@@ -1,0 +1,52 @@
+diff --git a/fuzzysearch/search.py b/fuzzysearch/search.py
+index d933c1a..674e463 100644
+--- a/fuzzysearch/search.py
++++ b/fuzzysearch/search.py
+@@ -13,20 +13,33 @@ class ComparisonCounter:
+         self.comparisons += 1
+ 
+ 
++def _z_blocks(s: str, counter) -> list[int]:
++    """Z-array: for each position, length of the longest prefix-match."""
++    z = [0] * len(s)
++    z[0] = len(s)
++    left = right = 0
++    for i in range(1, len(s)):
++        if i < right:
++            z[i] = min(right - i, z[i - left])
++        while i + z[i] < len(s):
++            counter.record()
++            if s[z[i]] != s[i + z[i]]:
++                break
++            z[i] += 1
++        if i + z[i] > right:
++            left, right = i, i + z[i]
++    return z
++
++
+ def substring_count(haystack: str, needle: str,
+-                    counter: ComparisonCounter | None = None) -> int:
+-    """Count (possibly overlapping) occurrences of needle in haystack."""
++                    counter=None) -> int:
++    """Count overlapping occurrences using the Z-algorithm: O(n + m)."""
++    from typing import Optional  # noqa: F401
+     counter = counter or ComparisonCounter()
+-    if not needle:
++    if not needle or len(needle) > len(haystack):
+         return 0
+-    count = 0
+-    for start in range(len(haystack) - len(needle) + 1):
+-        matched = True
+-        for offset, expected in enumerate(needle):
+-            counter.record()
+-            if haystack[start + offset] != expected:
+-                matched = False
+-                break
+-        if matched:
+-            count += 1
+-    return count
++    combined = needle + "\x00" + haystack
++    z = _z_blocks(combined, counter)
++    return sum(1 for v in z[len(needle):] if v >= len(needle))
++
++

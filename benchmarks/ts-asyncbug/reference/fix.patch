@@ -1,0 +1,149 @@
+diff --git a/src/queue.js b/src/queue.js
+index ddcd677..cb4379b 100644
+--- a/src/queue.js
++++ b/src/queue.js
+@@ -41,15 +41,13 @@ export class TaskQueue {
+   }
+ 
+   /**
+-   * Dispatches every pending job.
+-   *
+-   * BUG: the handler promise is neither awaited nor tracked, so flush()
+-   * resolves before outcomes are recorded. Under load callers observe
+-   * completed=failed=0 right after awaiting flush(), and close() discards
+-   * the still-unrecorded work entirely.
++   * Dispatches every pending job and resolves only once all dispatched work
++   * has settled, so stats/results are complete by the time callers observe.
+    */
+   async flush() {
+     const batch = this.pending.splice(0);
++    /** @type {Promise<void>[]} */
++    const tracked = [];
+     for (const job of batch) {
+       const handler = this.handlers.get(job.kind);
+       if (!handler) {
+@@ -57,29 +55,30 @@ export class TaskQueue {
+         this.stats.failed += 1;
+         continue;
+       }
+-      Promise.resolve()
+-        .then(() => handler(job.payload))
+-        .then(
+-          (value) => {
++      tracked.push(
++        (async () => {
++          try {
++            const value = await handler(job.payload);
+             this.results.set(job.id, { status: "completed", value });
+             this.stats.completed += 1;
+-          },
+-          (error) => {
++          } catch (error) {
+             this.results.set(job.id, { status: "failed", error });
+             this.stats.failed += 1;
+-          },
+-        );
++          }
++        })(),
++      );
+     }
++    await Promise.all(tracked);
+   }
+ 
+   /**
+-   * Closes the queue: later enqueues are rejected as dropped.
+-   *
+-   * BUG: returns before any in-flight work settles, so jobs flushed just
+-   * before close() lose their outcome bookkeeping.
++   * Closes the queue after draining anything still pending; later enqueues
++   * are rejected as explicit drops.
+    */
+   async close() {
+     this.closed = true;
+-    this.pending.length = 0;
++    if (this.pending.length > 0) {
++      await this.flush();
++    }
+   }
+ }
+diff --git a/src/scheduler.js b/src/scheduler.js
+index 76f1d6e..dcb137d 100644
+--- a/src/scheduler.js
++++ b/src/scheduler.js
+@@ -3,12 +3,8 @@ import { TaskQueue } from "./queue.js";
+ /**
+  * Runs a batch through a fresh TaskQueue and returns the outcome report.
+  *
+- * Jobs whose handler throws are retried up to `maxAttempts` times total.
+- *
+- * BUG: the retry decision and the final report both read queue.stats
+- * before the (untracked) handler promises record anything, so failures
+- * are never retried and the report claims every job vanished:
+- * processed=0 even when every handler succeeds.
++ * Jobs whose handler throws are retried up to `maxAttempts` times total; a
++ * retried spec keeps its logical (first) id in the final report.
+  *
+  * @param {Array<{kind: string, payload: any}>} jobs
+  * @param {Record<string, (payload: any) => any>} handlers
+@@ -21,29 +17,53 @@ export async function runPipeline(jobs, handlers, { maxAttempts = 2 } = {}) {
+     queue.register(kind, handler);
+   }
+ 
++  // logicalId -> { attempts, latestResultId, spec }
++  const ledger = new Map();
++
+   for (const spec of jobs) {
+-    queue.enqueue(spec);
++    const job = queue.enqueue(spec);
++    if (job) {
++      ledger.set(job.id, { attempts: 1, latestResultId: job.id, spec });
++    }
+   }
+ 
+   await queue.flush();
+ 
+-  if (maxAttempts > 1 && queue.stats.failed > 0) {
+-    // Retried jobs would be re-enqueued here; the stale counters above mean
+-    // this branch never fires in practice.
++  let retryable = [...ledger.entries()]
++    .filter(([, entry]) => {
++      const outcome = queue.results.get(entry.latestResultId);
++      return entry.attempts < maxAttempts && outcome?.status === "failed";
++    });
++
++  while (retryable.length > 0) {
++    for (const [logicalId, entry] of retryable) {
++      const job = queue.enqueue(entry.spec);
++      entry.attempts += 1;
++      entry.latestResultId = job ? job.id : entry.latestResultId;
++      ledger.set(logicalId, entry);
++    }
+     await queue.flush();
++    retryable = [...ledger.entries()].filter(([, entry]) => {
++      const outcome = queue.results.get(entry.latestResultId);
++      return entry.attempts < maxAttempts && outcome?.status === "failed";
++    });
+   }
+ 
+   await queue.close();
+ 
+   const failed = [];
+-  for (const [, outcome] of queue.results) {
+-    if (outcome.status === "failed") {
+-      failed.push(outcome);
++  let succeeded = 0;
++  for (const [logicalId, entry] of ledger) {
++    const outcome = queue.results.get(entry.latestResultId);
++    if (outcome?.status === "completed") {
++      succeeded += 1;
++    } else {
++      failed.push({ id: logicalId, error: outcome?.error });
+     }
+   }
+   return {
+     total: jobs.length,
+-    succeeded: queue.stats.completed,
++    succeeded,
+     failed,
+   };
+ }

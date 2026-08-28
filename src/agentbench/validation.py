@@ -82,10 +82,27 @@ def validate_benchmark(manifest_path: Path, *, work_root: Path | None = None) ->
         return report
     report.add("manifest loads", True, spec.name)
 
-    # Repository/fixture presence.
+    # Repository/fixture presence. Wheel/sdist installs ship the generator
+    # rather than a generated fixture repository; provision deterministically.
     repository = resolve_repository_path(spec.repository, base_dir=benchmark_dir)
-    repo_exists = Path(repository).exists()
-    report.add("repository/fixture exists", repo_exists, repository)
+    repo_path = Path(repository)
+    try:
+        local_fixture = repo_path.resolve().is_relative_to(benchmark_dir)
+    except OSError:  # noqa: BLE001 - unreachable resolve counts as remote
+        local_fixture = False
+    # A usable fixture needs version control metadata; direct-wheel installs
+    # may ship file-only stubs because force-include ignores .gitignore.
+    repo_exists = repo_path.exists() and (repo_path / ".git").is_dir()
+    detail = str(repository)
+    if not repo_exists and local_fixture and (benchmark_dir / "create_fixture.py").is_file():
+        generated = subprocess.run(
+            [sys.executable, str(benchmark_dir / "create_fixture.py")],
+            capture_output=True, text=True,
+        )
+        repo_exists = generated.returncode == 0 and (repo_path / ".git").is_dir()
+        outcome = "generated via create_fixture.py" if repo_exists else "generator failed"
+        detail = f"{outcome}: {(generated.stderr or generated.stdout).strip()[:160] or repository}"
+    report.add("repository/fixture exists", repo_exists, detail)
     if not repo_exists:
         return report
 

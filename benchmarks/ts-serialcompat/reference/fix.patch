@@ -1,0 +1,86 @@
+diff --git a/src/envelope.js b/src/envelope.js
+index 24014c4..0f85af5 100644
+--- a/src/envelope.js
++++ b/src/envelope.js
+@@ -4,27 +4,47 @@ export const FORMAT = "shipmanifest";
+ export const VERSION = 2;
+ 
+ /**
+- * Serializes a manifest into a v2 envelope.
+- *
+- * BUG: the input is written out as-is instead of being normalized first, so
+- * manifests built with legacy snake_case fields (or partial objects) produce
+- * envelopes whose payloads silently drop data on the next decode.
+- *
++ * Serializes a manifest into a canonical v2 envelope. The input is always
++ * normalized first, so either naming convention yields byte-identical output
++ * and structurally invalid manifests are rejected.
+  * @param {any} manifest
+  * @returns {string} canonical single-line JSON envelope
+  */
+ export function encode(manifest) {
+-  return JSON.stringify({ format: FORMAT, version: VERSION, payload: manifest });
++  return JSON.stringify({
++    format: FORMAT,
++    version: VERSION,
++    payload: normalizeManifest(manifest),
++  });
+ }
+ 
+ /**
+- * Parses one envelope back into a canonical manifest.
+- *
+- * BUG: only version 2 is accepted. Archives written by the pre-upgrade
+- * emitter use the "shipmanifest.v1" format (snake_case payload, weights in
+- * metric tons under `items[].mass_tons`) and every such line now fails with
+- * "unsupported envelope version".
+- *
++ * Rebuilds a canonical manifest from a legacy v1 envelope: snake_case field
++ * names map to their camelCase successors and metric tons convert to
++ * kilograms exactly (1 t = 1000 kg).
++ * @param {any} doc
++ */
++function fromV1(doc) {
++  const legacy = doc.manifest ?? {};
++  const cargo = Array.isArray(legacy.items)
++    ? legacy.items.map((item) => ({
++        sku: item.item_code,
++        qty: item.quantity,
++        weightKg: Number(item.mass_tons) * 1000,
++      }))
++    : [];
++  return normalizeManifest({
++    id: legacy.manifest_id,
++    vessel: legacy.vessel_name,
++    port: legacy.dock,
++    sealedAt: legacy.sealed_at,
++    cargo,
++  });
++}
++
++/**
++ * Parses one envelope back into a canonical manifest. Accepts the current v2
++ * format and archived v1 envelopes; everything else fails with a clear error.
+  * @param {string} text
+  * @returns {any} canonical manifest
+  */
+@@ -38,11 +58,14 @@ export function decode(text) {
+   if (doc === null || typeof doc !== "object") {
+     throw new TypeError("not a shipmanifest envelope");
+   }
+-  if (doc.format !== FORMAT && doc.format !== "shipmanifest.v1") {
+-    throw new TypeError(`not a shipmanifest envelope: format ${String(doc.format)}`);
++  if (doc.format === FORMAT && doc.version === VERSION) {
++    return normalizeManifest(doc.payload);
++  }
++  if (doc.format === "shipmanifest.v1") {
++    return fromV1(doc);
+   }
+-  if (doc.version !== VERSION) {
+-    throw new Error(`unsupported envelope version: ${String(doc.version)}`);
++  if (doc.format !== FORMAT) {
++    throw new TypeError(`not a shipmanifest envelope: format ${String(doc.format)}`);
+   }
+-  return doc.payload;
++  throw new Error(`unsupported envelope version: ${String(doc.version)}`);
+ }

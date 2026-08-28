@@ -162,6 +162,41 @@ class TestReproducePreflight:
             f"checks={comparison.checks} blocked={comparison.blocked_reason}"
         )
 
+    def test_baseline_context_marker_does_not_block_reproduction(self, tmp_path):
+        # Regression: baseline runs store "_baseline: reference_patch" in the
+        # effective snapshot. It is run context, not task identity, so it must
+        # not make every --baseline reference reproduction refuse.
+        manifest = tmp_path / "bench" / "benchmark.yaml"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        original = self._original(tmp_path)  # seeds a stub manifest first
+        manifest.write_text(
+            "name: demo\n"
+            "repository: fixture-repo\n"
+            "commit: " + "a" * 40 + "\n"
+            "prompt: fix it\n"
+            "agent:\n"
+            "  type: claude-code\n"
+            "evaluations:\n"
+            "  - name: t\n"
+            "    command: echo ok\n",
+            encoding="utf-8",
+        )
+        from agentbench.loader import load_benchmark as real_load
+
+        snapshot = real_load(manifest).config_snapshot()
+        snapshot["_benchmark_manifest"] = str(manifest)
+        snapshot["_baseline"] = "reference_patch"  # recorded by baseline runs
+        original["config"].update(snapshot)
+
+        comparison = preflight(original, results_root=tmp_path)
+
+        by_name = {name: same for name, same, _ in comparison.checks}
+        assert by_name.get("benchmark task identity") is True, (
+            f"checks={comparison.checks} blocked={comparison.blocked_reason}"
+        )
+        if comparison.blocked_reason is not None:
+            assert "task identity differs" not in comparison.blocked_reason
+
 
 class TestConditionChecks:
     def test_reports_matching_and_differing_conditions(self):

@@ -1,0 +1,56 @@
+name: goal-dedupe
+repository: fixture
+commit: 2295187747364f0dd5704b6f87049442dc082efc
+description: |
+  Ingestion pipeline rebuilds its dedupe state on every submission batch, so
+  record ids seen in earlier batches (or by sibling pipelines sharing the same
+  result store) are processed again from scratch. Results stay correct because
+  the transform is deterministic, but under load hot records execute once per
+  containing batch instead of exactly once ever.
+prompt: |
+  Duplicate records are processed twice under load; eliminate redundant
+  processing while preserving public behavior and ordering guarantees.
+agent:
+  type: claude-code
+evaluations:
+  - name: public-tests
+    command: '"{python}" -m pytest -q'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  compatibility: {weight: 0.2, required: true}
+  edge_cases:    {weight: 0.2, required: false}
+  diagnostics:   {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: dedupe-load-contract
+      command: '"{python}" -m pytest -q'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: performance
+tags: [dedupe, idempotency, ingestion]
+suites: [goal-oriented-provisional]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch   # maintainer-only known-good fix; never exposed to agents
+timeout_seconds: 900
+results_dir: results
+# ---- v0.6 metadata ----
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "Every record id is executed for processing exactly once, regardless of how many batches or pipelines submit it"}
+  - {id: req-2, text: "Public behavior is preserved: outputs match the deterministic transform, one output per submitted record, in submission order"}
+  - {id: req-3, text: "The import surface (ingest, ingest.pipeline, ingest.dedupe, ingest.store public names) remains intact"}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["core_behavior", "edge_cases"]}
+  - {requirement: req-3, scored_by: ["compatibility"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: goal-oriented
+quality_status: provisional

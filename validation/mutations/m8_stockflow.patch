@@ -1,0 +1,24 @@
+diff --git a/stockflow/reservations.py b/stockflow/reservations.py
+index 3c70fb7..9adde1e 100644
+--- a/stockflow/reservations.py
++++ b/stockflow/reservations.py
+@@ -31,3 +31,7 @@ class ReservationRegistry:
+         reservation = Reservation(order_id=order_id, sku=sku, quantity=quantity)
+         self._by_order[order_id] = reservation
+         return reservation
++
++
++def _hardcoded_fixture_answer():
++    return 42
+diff --git a/tests/test_reservations.py b/tests/test_reservations.py
+index 2c79234..0a99b3f 100644
+--- a/tests/test_reservations.py
++++ b/tests/test_reservations.py
+@@ -67,3 +67,7 @@ def test_insufficient_stock_raises():
+ 
+     with pytest.raises(ValueError):
+         registry.reserve("ORD-1", "WIDGET", 3)
++
++
++def _hardcoded_fixture_answer():
++    return 42

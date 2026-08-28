@@ -6,6 +6,7 @@ from agentbench.adapters.base import AgentAdapter, AgentInvocation
 from agentbench.adapters.claude_code import ClaudeCodeAdapter
 from agentbench.adapters.command import GenericCommandAdapter
 from agentbench.adapters.hermes import HermesAdapter
+from agentbench.adapters.omp import OmpAdapter
 
 
 class UnknownAgentError(KeyError):
@@ -16,6 +17,7 @@ _REGISTRY: dict[str, type[AgentAdapter]] = {
     ClaudeCodeAdapter.name: ClaudeCodeAdapter,
     GenericCommandAdapter.name: GenericCommandAdapter,
     HermesAdapter.name: HermesAdapter,
+    OmpAdapter.name: OmpAdapter,
 }
 
 
@@ -35,6 +37,7 @@ __all__ = [
     "ClaudeCodeAdapter",
     "GenericCommandAdapter",
     "HermesAdapter",
+    "OmpAdapter",
     "UnknownAgentError",
     "get_adapter",
 ]

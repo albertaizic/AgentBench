@@ -90,7 +90,12 @@ def wilson_interval(
 
 
 def quantile(values: list[float], q: float) -> float | None:
-    """Linear-interpolated quantile on unsorted input; None when empty."""
+    """Linear-interpolated quantile on unsorted input; None when empty.
+
+    Convention: Type-7 / "inclusive" (numpy default) — position = q*(n-1)
+    on the ascending-sorted sample, linear interpolation between neighbors.
+    q=0.5 is the standard median; q=0/1 give sample min/max.
+    """
     usable = sorted(v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool))
     if not usable:
         return None
@@ -130,9 +135,12 @@ def pairwise_compare(
     if not shared:
         return None
     counts = {"both_pass": 0, "a_only": 0, "b_only": 0, "both_fail": 0}
+    a_passes = b_passes = 0
     for cell in shared:
         a_passed = map_a[cell].get("status") == "passed"
         b_passed = map_b[cell].get("status") == "passed"
+        a_passes += a_passed
+        b_passes += b_passed
         if a_passed and b_passed:
             counts["both_pass"] += 1
         elif a_passed:
@@ -141,7 +149,16 @@ def pairwise_compare(
             counts["b_only"] += 1
         else:
             counts["both_fail"] += 1
+    # Hard marginals invariant (v0.6 acceptance): A_total == both + A_only,
+    # B_total == both + B_only, N == sum of the four buckets. Violations mean
+    # cell matching or orientation is broken — never render such numbers.
+    assert a_passes == counts["both_pass"] + counts["a_only"], (
+        f"A marginal broken: {a_passes} != {counts['both_pass']} + {counts['a_only']}")
+    assert b_passes == counts["both_pass"] + counts["b_only"], (
+        f"B marginal broken: {b_passes} != {counts['both_pass']} + {counts['b_only']}")
     counts["matched"] = len(shared)
+    counts["a_passes_matched"] = a_passes
+    counts["b_passes_matched"] = b_passes
     return counts
 
 
@@ -164,7 +181,10 @@ def pairwise_statistics(rows_a: list[dict], rows_b: list[dict]) -> dict | None:
 
     result = pairwise_compare(rows_a, rows_b)
     assert result is not None  # shared is non-empty
-    result["mcnemar_p"] = mcnemar_exact_p(result["b_only"], result["a_only"])
+    # Two-sided exact binomial over discordant pairs: numerically symmetric
+    # in its arguments, but pass them in declared A/B order so the stored
+    # inputs always match the reported orientation.
+    result["mcnemar_p"] = mcnemar_exact_p(result["a_only"], result["b_only"])
 
     for prefix, mapping in (("a", map_a), ("b", map_b)):
         durations, tokens, costs = [], [], []
@@ -198,7 +218,7 @@ class ConfigAggregate:
     """Mutable accumulator: group statistics are filled in row by row."""
 
     config_hash: str
-    label: str  # "Agent/Model" display label; model may be unknown
+    label: str  # config name when known, else "Agent/Model" display label
     runs: int = 0
     passes: int = 0
     resolved_commits: set = field(default_factory=set)
@@ -211,6 +231,7 @@ class ConfigAggregate:
     backends: set = field(default_factory=set)
     image_ids: set = field(default_factory=set)
     violation_counts: list = field(default_factory=list)  # protected-path hits per run
+    benchmarks: set = field(default_factory=set)
 
     @property
     def pass_rate(self) -> float | None:
@@ -290,12 +311,21 @@ def aggregate_by_config(rows: list[dict]) -> list[ConfigAggregate]:
         config_hash = str(row.get("config_hash") or "unknown")
         group = groups.get(config_hash)
         if group is None:
-            model = row.get("model")
-            label = str(row.get("agent") or "?") + ("/" + str(model) if model else "")
+            # Prefer the experiment config name: several configs can share an
+            # agent type (e.g. two command configs), which would otherwise
+            # collapse into indistinguishable labels.
+            config_name = str(row.get("config_name") or "")
+            if config_name:
+                label = config_name
+            else:
+                model = row.get("model")
+                label = str(row.get("agent") or "?") + ("/" + str(model) if model else "")
             group = groups[config_hash] = ConfigAggregate(
                 config_hash=config_hash, label=label
             )
         passed = row.get("status") == "passed"
+        if row.get("benchmark"):
+            group.benchmarks.add(str(row["benchmark"]))
         group.runs += 1
         group.passes += 1 if passed else 0
         if row.get("status"):

@@ -1,0 +1,35 @@
+diff --git a/schemamigrate/serializer.py b/schemamigrate/serializer.py
+index cf16d78..edc6fc5 100644
+--- a/schemamigrate/serializer.py
++++ b/schemamigrate/serializer.py
+@@ -5,20 +5,18 @@ from __future__ import annotations
+ import json
+ from typing import Any
+ 
+-from .compat import nest_payload
++from .compat import flatten_document
+ from .model import ConfigDocument
+ 
+ 
+ def dumps(document: ConfigDocument) -> str:
+-    # BUG: the write path ignores document.format_version entirely - every
+-    # document is re-emitted in the v2 nested layout (silently upgrading v1
+-    # inputs), and the unmodelled settings held in ``extras`` are dropped
+-    # from the payload altogether.
+-    payload: dict[str, Any] = nest_payload(
+-        {
+-            f"{section}.{key}": value
+-            for section, values in document.sections.items()
+-            for key, value in values.items()
+-        }
+-    )
++    # Write in the layout the document was loaded from; never upgrade
++    # silently. Unmodelled settings travel in the payload either way.
++    if document.format_version == 2:
++        payload: dict[str, Any] = {"version": 2}
++        for section, values in document.sections.items():
++            payload[section] = dict(values)
++        payload.update(document.extras)
++    else:
++        payload = flatten_document(document)
+     return json.dumps(payload, indent=2, sort_keys=True) + "\n"

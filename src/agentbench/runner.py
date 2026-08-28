@@ -36,13 +36,14 @@ from agentbench.diffs import capture_diff
 from agentbench.envmeta import capture_environment
 from agentbench.evaluation import (
     EvaluationOutcome,
-    run_evaluation,
-    run_hidden_evaluation,
     substitute_placeholders,
+    run_hidden_evaluation,
+    run_evaluation,
 )
 from agentbench.models import AgentSpec, BenchmarkSpec, ExecutionSpec
 from agentbench.process import ProcessResult, run_command
 from agentbench.protected import find_policy_violations
+from agentbench.scoring import ScorerSpecView, compute_scoring
 from agentbench.results import SCHEMA_VERSION, RunArtifacts, RunResult, eval_artifact_stem, write_run
 from agentbench.stages import (
     STAGE_AGENT,
@@ -54,7 +55,7 @@ from agentbench.stages import (
     STAGE_WORKSPACE,
     StageTimer,
 )
-from agentbench.taxonomy import SETUP_FAILED, Classification, classify_run
+from agentbench.taxonomy import SETUP_FAILED, Classification, classify_run, classify_validity
 from agentbench.workspace import Workspace, WorkspaceError, create_workspace
 
 
@@ -120,6 +121,25 @@ def _effective_policies(spec: BenchmarkSpec) -> list[tuple[list[str], str]]:
     for change_policy in spec.change_policies:
         policies.append((list(change_policy.patterns), change_policy.policy))
     return policies
+
+
+def effective_public_scorers(spec: BenchmarkSpec) -> list[ScorerSpecView]:
+    """Public scorers for a spec: explicit declarations or legacy fallback.
+
+    Legacy ``evaluations`` entries become required binary scorers in the
+    "default" group, preserving v0.1 semantics exactly.
+    """
+    if spec.scorers:
+        return [
+            ScorerSpecView(
+                id=s.id, command=s.command, score_type=s.score_type,
+                groups=tuple(s.groups), required=s.required, max_count=s.max_count,
+            )
+            for s in spec.scorers
+        ]
+    return [
+        ScorerSpecView(id=e.name, command=e.command) for e in spec.evaluations
+    ]
 
 
 def run_benchmark(
@@ -269,15 +289,15 @@ def run_benchmark(
             with timer.stage(STAGE_EVALUATION):
                 try:
                     placeholders = backend.placeholders(workspace=workspace.path, hidden_dir=hidden_dir)
-                    for evaluation in spec.evaluations:
+                    for scorer_view in effective_public_scorers(spec):
                         command = substitute_placeholders(
-                            evaluation.command,
+                            scorer_view.command,
                             workspace=Path(placeholders["workspace"]),
                             python_executable=placeholders["python"],
                             hidden_dir=Path(placeholders["hidden_dir"]) if placeholders["hidden_dir"] else None,
                         )
                         outcome = EvaluationOutcome(
-                            name=evaluation.name,
+                            name=scorer_view.id,
                             command=command,
                             **_public_eval_fields(backend, command, workspace.path, timeout),
                         )
@@ -296,6 +316,16 @@ def run_benchmark(
                     evaluation_error = evaluation_error or f"{type(exc).__name__}: {exc}"
 
             all_outcomes = [*public_outcomes, *hidden_outcomes]
+            # P8/P9: structured scorer breakdown + partial credit, computed
+            # over PUBLIC scorers; hidden evaluators gate resolution too.
+            scoring_summary = compute_scoring(
+                effective_public_scorers(spec),
+                public_outcomes,
+                declared_groups=spec.scoring_groups,
+            )
+            hidden_all_passed = all(o.passed for o in hidden_outcomes)
+            resolved = bool(scoring_summary.resolved and hidden_all_passed)
+
             with timer.stage(STAGE_EVIDENCE):
                 violations = find_policy_violations(
                     list(diff.changed_paths), _effective_policies(spec)
@@ -306,10 +336,14 @@ def run_benchmark(
                     outcomes=all_outcomes,
                     violations=violations,
                     evaluation_error=evaluation_error,
+                    resolved_override=(
+                        resolved if (spec.scorers or spec.scoring_groups) else None
+                    ),
                 )
 
             result = _build_result(
                 spec,
+                scoring=scoring_summary,
                 run_id=run_id,
                 trial=trial,
                 workspace=workspace,
@@ -324,6 +358,7 @@ def run_benchmark(
                 violations=violations,
                 classification=classification,
                 started_at=started_at,
+                timeout_seconds=timeout,
                 duration=time.monotonic() - start_monotonic,
                 keep_workspace=keep_workspace,
                 experiment_id=experiment_id,
@@ -344,6 +379,16 @@ def run_benchmark(
             # the evidence of a completed run down with it.
             with timer.stage(STAGE_PERSISTENCE):
                 run_dir = write_run(result, artifacts, results_root=root, run_dir_name=run_id)
+                _persist_trajectory(
+                    run_dir=run_dir,
+                    agent_type=result.agent.get("type", ""),
+                    stdout_path=run_dir / "agent.stdout.log",
+                    session_id=(
+                        agent_output.usage.session_id
+                        if agent_output is not None and agent_output.usage is not None
+                        else None
+                    ),
+                )
         finally:
             with timer.stage(STAGE_CLEANUP):
                 backend.cleanup()
@@ -366,11 +411,64 @@ def run_benchmark(
     except OSError:
         pass
 
+    # If trajectory extraction ran inside the persistence stage it already
+    # wrote trajectory.jsonl; nothing further is required here.
     return RunOutcome(
         result=result,
         run_dir=run_dir,
         workspace_path=workspace.path if keep_workspace else None,
     )
+
+
+def _export_hermes_session(session_id: str | None) -> str | None:
+    if not session_id:
+        return None
+    from agentbench.process import resolve_executable
+
+    result = run_command(
+        [resolve_executable("hermes"), "sessions", "export", "--format", "jsonl",
+         "--session-id", str(session_id), "-"],
+        timeout=60.0,
+        cwd=Path.cwd(),
+    )
+    if result.exit_code == 0 and result.stdout and result.stdout.strip().startswith("{"):
+        return result.stdout
+    return None
+
+
+def _persist_trajectory(
+    *,
+    run_dir: Path,
+    agent_type: str,
+    stdout_path: Path,
+    session_id: str | None,
+) -> None:
+    """Write ``trajectory.jsonl`` beside the raw logs. Never raises."""
+    from agentbench import trajectories as traj
+
+    stdout_text = ""
+    try:
+        stdout_text = Path(stdout_path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        pass
+    claude_stdout = omp_stdout = hermes_export = None
+    if agent_type == "claude-code":
+        claude_stdout = stdout_text
+    elif agent_type == "omp":
+        omp_stdout = stdout_text
+    elif agent_type == "hermes":
+        hermes_export = _export_hermes_session(session_id)
+
+    builder = traj.extract_trajectory(
+        agent_type,
+        claude_stdout=claude_stdout,
+        hermes_export=hermes_export,
+        omp_stdout=omp_stdout,
+        run_id=run_dir.name,
+    )
+    if builder.events:
+        traj.write_trajectory(run_dir, builder)
+
 
 
 def _persist_setup_failure(
@@ -503,9 +601,20 @@ def _classify(
     outcomes: list[EvaluationOutcome],
     violations,
     evaluation_error: str | None,
+    resolved_override: bool | None = None,
 ) -> Classification:
     if evaluation_error is not None:
-        return Classification("invalid_result", evaluation_error)
+            return Classification("invalid_result", evaluation_error)
+    if resolved_override is not None:
+        # P8/P9 scorer-aware resolution: only REQUIRED scorers gate the
+        # binary outcome; non-required groups contribute partial credit.
+        return classify_run(
+            agent_timed_out=agent_timed_out,
+            agent_exit_code=agent_exit_code,
+            evaluations_passed=bool(outcomes) and resolved_override,
+            has_evaluation_results=bool(outcomes),
+            protected_violation=any(v.policy == "fail" for v in violations),
+        )
     return classify_run(
         agent_timed_out=agent_timed_out,
         agent_exit_code=agent_exit_code,
@@ -531,9 +640,11 @@ def _build_result(
     hidden_outcomes: list[EvaluationOutcome],
     violations,
     classification: Classification,
+    scoring=None,
     started_at: datetime,
     duration: float,
     keep_workspace: bool,
+    timeout_seconds: float | None,
     experiment_id: str | None,
     config_name: str | None,
     manifest_path: Path | None,
@@ -555,6 +666,16 @@ def _build_result(
     if getattr(workspace, "prep_info", None):
         # How the source was obtained (cache hit/miss + preparation seconds).
         execution_provenance["source_preparation"] = dict(workspace.prep_info)
+
+    caps = adapter.capabilities()
+    execution_provenance["limits"] = {
+        "wall_time_seconds": timeout_seconds,
+        "token_budget": spec.execution.token_budget if spec.execution else None,
+        "cost_budget_usd": spec.execution.cost_budget_usd if spec.execution else None,
+        "enforced": ["wall_time"],
+        "token_budget_enforced": AgentAdapter.CAP_TOKEN_BUDGET_ENFORCEMENT in caps,
+        "cost_budget_enforced": AgentAdapter.CAP_COST_BUDGET_ENFORCEMENT in caps,
+    }
 
     return RunResult(
         schema_version=SCHEMA_VERSION,
@@ -625,6 +746,14 @@ def _build_result(
             "started_at": started_at.isoformat(),
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "duration_seconds": round(duration, 3),
+            # Orthogonal to status (P41): can the evidence be graded as a
+            # capability measurement at all? Provider outages yield
+            # infra_invalid while staying visible in the taxonomy.
+            "validity": classify_validity(
+                agent_stdout=agent_run.stdout,
+                agent_stderr=agent_run.stderr,
+                total_tokens=usage.total_tokens if usage is not None else None,
+            ),
         },
         execution=execution_provenance,
         environment=capture_environment(agent_cli_version=agent_cli_version),
@@ -638,6 +767,11 @@ def _build_result(
         workspace_kept=keep_workspace,
         workspace_path=str(workspace.path) if keep_workspace else None,
         stage_timings=stage_timings,
+        scoring=(
+            scoring.to_dict()
+            if scoring is not None and (scoring.scorers or scoring.partial_score is not None)
+            else None
+        ),
     )
 
 

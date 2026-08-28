@@ -1,44 +1,41 @@
 name: iniforge
 repository: fixture
 commit: ebcf827d59e22feb431a6b649a5da172ec77503b
-description: |
-  Settings loader mis-parses INI configuration: duplicate keys keep the
-  FIRST occurrence (last should win) and booleans accept ambiguous junk.
-prompt: |
-  Our settings loader reads INI files and gets two things wrong:
-
-  1. When the same key appears twice in a section, we keep the FIRST value.
-     Standard INI semantics (and every other tool our users rely on) is
-     that the LAST occurrence wins.
-  2. Boolean values are coerced with a loose truthiness check: strings like
-     "yes ", "ON", "TrUe", and even "0" behave inconsistently, and unknown
-     words silently become False instead of raising an error.
-
-  Fix the loader so:
-  - last duplicate key wins within a section;
-  - accepted booleans are exactly: true/false, yes/no, on/off, 1/0,
-    case-insensitive, surrounding whitespace allowed;
-  - otherwise, integer-looking values ([+-]?digits) become int;
-  - every other NON-EMPTY value stays a string verbatim;
-  - an empty value raises ValueError mentioning the key.
-
-  The failing public tests describe the contract.
+description: "Settings loader mis-parses INI configuration: duplicate keys keep the\n\
+  FIRST occurrence (last should win) and booleans accept ambiguous junk.\n Provenance\
+  \ reviewed 2026-08-26: synthetic fixture repo authored in-repo by create_fixture\
+  \ generator; prompt written fresh for AgentBench; not drawn from any public dataset."
+prompt: "Our settings loader reads INI files and gets two things wrong:\n\n1. When\
+  \ the same key appears twice in a section, we keep the FIRST value.\n   Standard\
+  \ INI semantics (and every other tool our users rely on) is\n   that the LAST occurrence\
+  \ wins.\n2. Boolean values are coerced with a loose truthiness check: strings like\n\
+  \   \"yes \", \"ON\", \"TrUe\", and even \"0\" behave inconsistently, and unknown\n\
+  \   words silently become False instead of raising an error.\n\nFix the loader so:\n\
+  - last duplicate key wins within a section;\n- accepted booleans are exactly: true/false,\
+  \ yes/no, on/off, 1/0,\n  case-insensitive, surrounding whitespace allowed;\n- otherwise,\
+  \ integer-looking values ([+-]?digits) become int;\n- every other NON-EMPTY value\
+  \ stays a string verbatim;\n- an empty value raises ValueError mentioning the key.\n\
+  \nThe failing public tests describe the contract.\n"
 agent:
   type: claude-code
 evaluations:
-  - name: public-tests
-    command: '"{python}" -m pytest -q'
+- name: public-tests
+  command: '"{python}" -m pytest -q'
 hidden_evaluations:
   source: hidden
   evaluations:
-    - name: parsing-contract
-      command: '"{python}" -m pytest -q'
+  - name: parsing-contract
+    command: '"{python}" -m pytest -q'
 protected_paths:
-  - tests/**
+- tests/**
 fail_on_protected_path_violation: true
 category: bugfix
-tags: [parsing, config]
-suites: [python-core, bugfix]
+tags:
+- parsing
+- config
+suites:
+- python-core
+- bugfix
 language: python
 difficulty: easy
 expect_broken_baseline: true
@@ -46,3 +43,34 @@ reference_solution:
   patch: reference/fix.patch
 timeout_seconds: 600
 results_dir: results
+prompt_requirements:
+- id: R1
+  requirement: 'Duplicate keys in a section: LAST occurrence wins'
+- id: R2
+  requirement: Boolean coercion covers a full word matrix (yes/no/on/off/true/false
+    variants) case-insensitively; blank values raise
+- id: R3
+  requirement: Blank boolean values raise with an error naming the offending key
+- id: R4
+  requirement: Integer-looking and punctuation-bearing values stay strings; comments/blank
+    lines ignored; root keys before any section are handled
+requirement_mappings:
+- requirement: R1
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'parsing-contract'
+- requirement: R2
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'parsing-contract'
+- requirement: R3
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'parsing-contract'
+- requirement: R4
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'parsing-contract'
+source_kind: authored
+task_created_at: '2026-08-24T00:00:00+00:00'
+contamination_risk: low

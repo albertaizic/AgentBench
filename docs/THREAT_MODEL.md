@@ -54,3 +54,23 @@ What remains impossible on host without OS-level sandboxing: network
 isolation, filesystem confinement, guaranteed parent-death cleanup of
 grandchildren on all platforms (Windows lacks stdlib job objects). These are
 stated as limitations rather than papered over.
+
+## Trajectory privacy (v0.6)
+
+`trajectory.jsonl` normalizes externally observable agent activity only:
+tool calls, shell commands, file operations, usage figures. Provider
+chain-of-thought / reasoning deltas are dropped at parse time by every
+adapter extractor, and the audit fails canary placements inside evaluator
+commands. Raw harness logs (`agent.stdout.log`, session exports) remain
+local evidence and may contain more context than the normalized view; they
+are never copied into public study bundles. Bundle exports ship the
+normalized report, flattened metrics, identities and integrity hashes —
+after a deterministic secret scan — never raw trajectories or environment
+captures.
+
+Public bundles are classified explicitly:
+
+* **safe public artifacts**: `report.md/html`, `metrics.csv`,
+  `identities.json`, `experiment.json`, `hashes.json`;
+* **private local artifacts**: everything else under `results/` (raw logs,
+  eval outputs, patches, trajectories).

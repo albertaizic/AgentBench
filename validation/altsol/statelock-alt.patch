@@ -1,0 +1,65 @@
+diff --git a/statelock/guards.py b/statelock/guards.py
+index 63fd663..2efc12c 100644
+--- a/statelock/guards.py
++++ b/statelock/guards.py
+@@ -2,6 +2,8 @@
+ 
+ from __future__ import annotations
+ 
++from statelock.effects import EffectJournal
++
+ 
+ class GuardViolation(Exception):
+     """A transition lacks the side-effect evidence required to complete."""
+@@ -35,12 +37,12 @@ class TransitionGuard:
+     def required_for(self, target_state: str) -> tuple[str, ...]:
+         return self._requirements.get(target_state, ())
+ 
+-    # BUG: consults only the visible state label, never the effect journal,
+-    # so a machine whose intermediate side effects were skipped is waved
+-    # straight through to the terminal state.
+-    def check(self, target_state: str, current_state: str) -> None:
+-        allowed = ENTRY_STATES.get(target_state, ())
+-        if current_state not in allowed:
++    def check(self, target_state: str, journal: EffectJournal) -> None:
++        """Refuse entry unless every required effect has evidence."""
++        missing = [effect for effect in self.required_for(target_state)
++                   if not journal.has_effect(effect)]
++        if missing:
+             raise GuardViolation(
+-                f"cannot enter {target_state} from {current_state}"
++                f"missing side-effect evidence for {target_state}: "
++                f"{', '.join(missing)}"
+             )
+diff --git a/statelock/machine.py b/statelock/machine.py
+index 6bfb03a..0b903bb 100644
+--- a/statelock/machine.py
++++ b/statelock/machine.py
+@@ -78,21 +78,18 @@ class StateMachine:
+         action = self._journal.intent_for(request_id)
+         if action is None:
+             raise MachineError(f"no interrupted request: {request_id}")
+-        # Unlocked fast-path: skip the pipeline entirely and land on the
+-        # target state, running neither its side effect nor its guard.
+-        self._state = ACTION_TARGET[action]
+-        outcome = Outcome(request_id=request_id, action=action,
+-                          state=self._state)
+-        self._journal.record_outcome(request_id, outcome)
+-        return outcome
++        # Re-enter the ordinary pipeline from the intermediate state: the
++        # effect journal is the only source of truth for what already ran,
++        # and the guard sees the same evidence a fresh run would.
++        return self._drive(action, request_id)
+ 
+     def _drive(self, action: str, request_id: str) -> Outcome:
+         if action not in ACTION_START:
+             raise MachineError(f"unknown action: {action}")
+-        if self._state != ACTION_START[action]:
++        if self._state not in (ACTION_START[action], ACTION_INTERMEDIATE[action]):
+             raise MachineError(f"cannot {action} from {self._state}")
++        self._guard.check(ACTION_TARGET[action], self._journal)
+         self._state = ACTION_INTERMEDIATE[action]
+-        self._guard.check(ACTION_TARGET[action], self._state)
+         self._journal.run(ACTION_EFFECT[action], request_id)
+         self._state = ACTION_TARGET[action]
+         outcome = Outcome(request_id=request_id, action=action,

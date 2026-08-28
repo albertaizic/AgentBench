@@ -1,0 +1,45 @@
+{
+  "benchmark_identities": [
+    "tokenbucket",
+    "leasekit",
+    "vercomp",
+    "statelock",
+    "pluginreg",
+    "cacheflow",
+    "txnrollback",
+    "apimigrate"
+  ],
+  "config_definitions": {
+    "hermes-gpt-oss-20b": {
+      "agent": {
+        "argv": null,
+        "command": null,
+        "extra_args": [],
+        "model": "openai/gpt-oss-20b",
+        "prompt_mode": "stdin",
+        "provider": "openrouter",
+        "reasoning": "medium",
+        "type": "hermes"
+      },
+      "execution": null
+    },
+    "hermes-ox-alpha": {
+      "agent": {
+        "argv": null,
+        "command": null,
+        "extra_args": [],
+        "model": "stealth/ox-alpha",
+        "prompt_mode": "stdin",
+        "provider": "openrouter",
+        "reasoning": "medium",
+        "type": "hermes"
+      },
+      "execution": null
+    }
+  },
+  "config_identities": {
+    "hermes-gpt-oss-20b": "1177c6595f0a",
+    "hermes-ox-alpha": "c8396f624342"
+  },
+  "execution_backend": "host"
+}

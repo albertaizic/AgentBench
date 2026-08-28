@@ -1,0 +1,15 @@
+diff --git a/ledgerpad/tracker.py b/ledgerpad/tracker.py
+index b416b31..480b775 100644
+--- a/ledgerpad/tracker.py
++++ b/ledgerpad/tracker.py
+@@ -20,6 +20,10 @@ class ExpenseTracker:
+         self.expenses: list[Expense] = []
+ 
+     def add_expense(self, merchant: str, amount_cents: int, currency: str = "USD") -> Expense:
++        if amount_cents <= 0:
++            raise ValueError("amount must be positive")
++        if currency not in VALID_CURRENCIES:
++            raise ValueError(f"unknown currency: {currency}")
+         expense = Expense(merchant=merchant, amount_cents=amount_cents, currency=currency)
+         self.expenses.append(expense)
+         return expense

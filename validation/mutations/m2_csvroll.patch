@@ -1,0 +1,13 @@
+diff --git a/csvroll/records.py b/csvroll/records.py
+index 438cfae..1465e38 100644
+--- a/csvroll/records.py
++++ b/csvroll/records.py
+@@ -17,7 +17,7 @@ class RecordSet:
+     def to_csv(self) -> str:
+         # BUG: no quoting - commas/quotes in fields corrupt the file.
+         lines = [",".join(HEADER)]
+-        lines.extend(",".join(row) for row in self.rows)
++        lines.extend(",".join('"' + c.replace('"', '""') + '"' if any(ch in c for ch in ",\"") else c for c in row) for row in self.rows)
+         return "\n".join(lines) + "\n"
+ 
+     @classmethod

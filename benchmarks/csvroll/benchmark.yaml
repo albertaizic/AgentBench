@@ -1,39 +1,38 @@
 name: csvroll
 repository: fixture
 commit: cbc222adca3a318eacc96b5fafc42ff2351d3736
-description: |
-  CSV export/import loses data: hand-rolled join/split breaks on commas and
-  quotes, and the reader cannot ingest legacy header-less v1 files.
-prompt: |
-  Our record archive stores datasets as CSV. Two defects need fixing:
-
-  1. Round-tripping a dataset whose text fields contain commas or double
-     quotes corrupts the file: export joins fields with plain "," and import
-     splits on ",", so quoting rules are ignored entirely. Fields may also
-     contain embedded newlines once quoting is correct.
-  2. Legacy v1 archives were written WITHOUT a header row. The importer must
-     auto-detect this (a first line that exactly equals the canonical header
-     means v2; anything else is treated as data from v1) and load both
-     formats transparently.
-
-  Use Python's standard csv machinery rather than patching string surgery.
-  The failing public tests pin the contract.
+description: "CSV export/import loses data: hand-rolled join/split breaks on commas\
+  \ and\nquotes, and the reader cannot ingest legacy header-less v1 files.\n Provenance\
+  \ reviewed 2026-08-26: synthetic fixture repo authored in-repo by create_fixture\
+  \ generator; prompt written fresh for AgentBench; not drawn from any public dataset."
+prompt: "Our record archive stores datasets as CSV. Two defects need fixing:\n\n1.\
+  \ Round-tripping a dataset whose text fields contain commas or double\n   quotes\
+  \ corrupts the file: export joins fields with plain \",\" and import\n   splits\
+  \ on \",\", so quoting rules are ignored entirely. Fields may also\n   contain embedded\
+  \ newlines once quoting is correct.\n2. Legacy v1 archives were written WITHOUT\
+  \ a header row. The importer must\n   auto-detect this (a first line that exactly\
+  \ equals the canonical header\n   means v2; anything else is treated as data from\
+  \ v1) and load both\n   formats transparently.\n\nUse Python's standard csv machinery\
+  \ rather than patching string surgery.\nThe failing public tests pin the contract.\n"
 agent:
   type: claude-code
 evaluations:
-  - name: public-tests
-    command: '"{python}" -m pytest -q'
+- name: public-tests
+  command: '"{python}" -m pytest -q'
 hidden_evaluations:
   source: hidden
   evaluations:
-    - name: roundtrip-contract
-      command: '"{python}" -m pytest -q'
+  - name: roundtrip-contract
+    command: '"{python}" -m pytest -q'
 protected_paths:
-  - tests/**
+- tests/**
 fail_on_protected_path_violation: true
 category: serialization
-tags: [csv, migration]
-suites: [python-core]
+tags:
+- csv
+- migration
+suites:
+- python-core
 language: python
 difficulty: medium
 expect_broken_baseline: true
@@ -41,3 +40,40 @@ reference_solution:
   patch: reference/fix.patch
 timeout_seconds: 600
 results_dir: results
+prompt_requirements:
+- id: R1
+  requirement: Round-trip preserves commas, double quotes and embedded newlines inside
+    quoted fields
+- id: R2
+  requirement: Empty fields survive a round-trip
+- id: R3
+  requirement: Unicode labels round-trip unchanged
+- id: R4
+  requirement: Legacy v1 archives are detected only via an exact header match; v2
+    stays the default
+- id: R5
+  requirement: Row order is stable for many-row datasets
+requirement_mappings:
+- requirement: R1
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'roundtrip-contract'
+- requirement: R2
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'roundtrip-contract'
+- requirement: R3
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'roundtrip-contract'
+- requirement: R4
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'roundtrip-contract'
+- requirement: R5
+  scored_by:
+  - default
+  evidence: public 'public-tests' + hidden 'roundtrip-contract'
+source_kind: authored
+task_created_at: '2026-08-24T00:00:00+00:00'
+contamination_risk: low

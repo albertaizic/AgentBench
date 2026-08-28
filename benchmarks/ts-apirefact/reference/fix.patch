@@ -1,0 +1,277 @@
+diff --git a/src/client.js b/src/client.js
+index d215c94..ed2d81f 100644
+--- a/src/client.js
++++ b/src/client.js
+@@ -1,73 +1,79 @@
+ /**
+- * Monolithic API client for the Acme directory service (legacy surface).
++ * Deprecated compatibility shim.
+  *
+- * Every operation inlines its own path building and response-envelope
+- * handling, which is why this file keeps growing every sprint. New
+- * operations are still being added here instead of behind resource
+- * boundaries.
++ * Flat methods delegate to the resource modules and emit one deprecation
++ * warning per instance per method name through Node's warning channel.
+  */
++import { createUsersResource } from "./resources/users.js";
++import { createProjectsResource } from "./resources/projects.js";
+ 
+-/**
+- * Unwraps the standard `{ data: ... }` response envelope.
+- * @param {any} envelope
+- * @returns {any} the payload carried by the envelope
+- */
+-function unwrap(envelope) {
+-  if (
+-    envelope === null ||
+-    typeof envelope !== "object" ||
+-    !Object.hasOwn(envelope, "data")
+-  ) {
+-    throw new Error("malformed response envelope");
+-  }
+-  return envelope.data;
+-}
++const DEPRECATION_CODE = "ACME-DEP-API";
+ 
+ export class ApiClient {
++  #warned = new Set();
++
+   /** @param {import("./http.js").Transport} transport */
+   constructor(transport) {
+     this.transport = transport;
++    this.users = createUsersResource(transport);
++    this.projects = createProjectsResource(transport);
++  }
++
++  /** @param {string} method @param {string} replacement */
++  #warnOnce(method, replacement) {
++    if (this.#warned.has(method)) {
++      return;
++    }
++    this.#warned.add(method);
++    process.emitWarning(
++      `ApiClient.${method}() is deprecated; use client.${replacement}() instead.`,
++      { code: DEPRECATION_CODE },
++    );
+   }
+ 
+-  /** @returns {Promise<Array<{id: string, name: string, email: string}>>} */
+   async listUsers() {
+-    return unwrap(await this.transport.get("/v2/users"));
++    this.#warnOnce("listUsers", "users.list");
++    return this.users.list();
+   }
+ 
+   /** @param {string} id */
+   async getUser(id) {
+-    return unwrap(await this.transport.get(`/v2/users/${encodeURIComponent(id)}`));
++    this.#warnOnce("getUser", "users.get");
++    return this.users.get(id);
+   }
+ 
+   /** @param {{name: string, email: string}} data */
+   async createUser(data) {
+-    return unwrap(await this.transport.post("/v2/users", data));
++    this.#warnOnce("createUser", "users.create");
++    return this.users.create(data);
+   }
+ 
+   /** @param {string} id */
+   async deleteUser(id) {
+-    return unwrap(await this.transport.del(`/v2/users/${encodeURIComponent(id)}`));
++    this.#warnOnce("deleteUser", "users.remove");
++    return this.users.remove(id);
+   }
+ 
+-  /** @returns {Promise<Array<{id: string, title: string, open: boolean}>>} */
+   async listProjects() {
+-    return unwrap(await this.transport.get("/v2/projects"));
++    this.#warnOnce("listProjects", "projects.list");
++    return this.projects.list();
+   }
+ 
+   /** @param {string} id */
+   async getProject(id) {
+-    return unwrap(await this.transport.get(`/v2/projects/${encodeURIComponent(id)}`));
++    this.#warnOnce("getProject", "projects.get");
++    return this.projects.get(id);
+   }
+ 
+   /** @param {{title: string}} data */
+   async createProject(data) {
+-    return unwrap(await this.transport.post("/v2/projects", data));
++    this.#warnOnce("createProject", "projects.create");
++    return this.projects.create(data);
+   }
+ 
+   /** @param {string} id */
+   async closeProject(id) {
+-    return unwrap(
+-      await this.transport.post(`/v2/projects/${encodeURIComponent(id)}/close`),
+-    );
++    this.#warnOnce("closeProject", "projects.close");
++    return this.projects.close(id);
+   }
+ }
+diff --git a/src/facade.js b/src/facade.js
+new file mode 100644
+index 0000000..7549ac7
+--- /dev/null
++++ b/src/facade.js
+@@ -0,0 +1,16 @@
++import { createUsersResource } from "./resources/users.js";
++import { createProjectsResource } from "./resources/projects.js";
++
++/**
++ * Builds the namespaced resource facade.
++ * @param {{transport: import("./http.js").Transport}} options
++ */
++export function createClient({ transport }) {
++  if (!transport || typeof transport.get !== "function") {
++    throw new TypeError("createClient requires a transport");
++  }
++  return {
++    users: createUsersResource(transport),
++    projects: createProjectsResource(transport),
++  };
++}
+diff --git a/src/index.js b/src/index.js
+index 6a2c2af..1235d37 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -1,3 +1,5 @@
+-// Legacy entry point: the whole surface is the monolithic class.
+-export { ApiClient } from "./client.js";
++import { ApiClient } from "./client.js";
++
++export { createClient } from "./facade.js";
++export { ApiClient };
+ export default ApiClient;
+diff --git a/src/resources/projects.js b/src/resources/projects.js
+new file mode 100644
+index 0000000..e83032c
+--- /dev/null
++++ b/src/resources/projects.js
+@@ -0,0 +1,15 @@
++import { unwrapEnvelope } from "../response.js";
++
++/** @param {import("../http.js").Transport} transport */
++export function createProjectsResource(transport) {
++  return {
++    list: () => transport.get("/v2/projects").then(unwrapEnvelope),
++    get: (id) =>
++      transport.get(`/v2/projects/${encodeURIComponent(id)}`).then(unwrapEnvelope),
++    create: (data) => transport.post("/v2/projects", data).then(unwrapEnvelope),
++    close: (id) =>
++      transport
++        .post(`/v2/projects/${encodeURIComponent(id)}/close`)
++        .then(unwrapEnvelope),
++  };
++}
+diff --git a/src/resources/users.js b/src/resources/users.js
+new file mode 100644
+index 0000000..75dec6b
+--- /dev/null
++++ b/src/resources/users.js
+@@ -0,0 +1,13 @@
++import { unwrapEnvelope } from "../response.js";
++
++/** @param {import("../http.js").Transport} transport */
++export function createUsersResource(transport) {
++  return {
++    list: () => transport.get("/v2/users").then(unwrapEnvelope),
++    get: (id) =>
++      transport.get(`/v2/users/${encodeURIComponent(id)}`).then(unwrapEnvelope),
++    create: (data) => transport.post("/v2/users", data).then(unwrapEnvelope),
++    remove: (id) =>
++      transport.del(`/v2/users/${encodeURIComponent(id)}`).then(unwrapEnvelope),
++  };
++}
+diff --git a/src/response.js b/src/response.js
+new file mode 100644
+index 0000000..57f2ce5
+--- /dev/null
++++ b/src/response.js
+@@ -0,0 +1,15 @@
++/**
++ * Centralized response-envelope handling.
++ * @param {any} envelope
++ * @returns {any} the payload carried by the `{ data: ... }` envelope
++ */
++export function unwrapEnvelope(envelope) {
++  if (
++    envelope === null ||
++    typeof envelope !== "object" ||
++    !Object.hasOwn(envelope, "data")
++  ) {
++    throw new Error("malformed response envelope");
++  }
++  return envelope.data;
++}
+diff --git a/tools/audit_projects.js b/tools/audit_projects.js
+index 55af004..d106003 100644
+--- a/tools/audit_projects.js
++++ b/tools/audit_projects.js
+@@ -1,4 +1,4 @@
+-import { ApiClient } from "../src/client.js";
++import { createClient } from "../src/index.js";
+ 
+ /**
+  * Audits project state: lists titles with their open/closed status and
+@@ -7,8 +7,8 @@ import { ApiClient } from "../src/client.js";
+  * @returns {Promise<string>}
+  */
+ export async function main(transport) {
+-  const client = new ApiClient(transport);
+-  const projects = await client.listProjects();
++  const client = createClient({ transport });
++  const projects = await client.projects.list();
+ 
+   /** @type {string[]} */
+   const lines = [];
+@@ -18,7 +18,7 @@ export async function main(transport) {
+ 
+   for (const project of projects) {
+     if (project.title.startsWith("[stale]") && project.open) {
+-      await client.closeProject(project.id);
++      await client.projects.close(project.id);
+       lines.push(`closed ${project.id}`);
+     }
+   }
+diff --git a/tools/dump_users.js b/tools/dump_users.js
+index 138152e..92b340f 100644
+--- a/tools/dump_users.js
++++ b/tools/dump_users.js
+@@ -1,4 +1,4 @@
+-import { ApiClient } from "../src/client.js";
++import { createClient } from "../src/index.js";
+ 
+ /**
+  * Renders a directory listing plus a temporary-user smoke record.
+@@ -6,8 +6,8 @@ import { ApiClient } from "../src/client.js";
+  * @returns {Promise<string>}
+  */
+ export async function main(transport) {
+-  const client = new ApiClient(transport);
+-  const users = await client.listUsers();
++  const client = createClient({ transport });
++  const users = await client.users.list();
+ 
+   /** @type {string[]} */
+   const lines = [];
+@@ -15,12 +15,12 @@ export async function main(transport) {
+     lines.push(`- ${user.id}: ${user.name} <${user.email}>`);
+   }
+ 
+-  const created = await client.createUser({
++  const created = await client.users.create({
+     name: "Temp User",
+     email: "temp@acme.example",
+   });
+   lines.push(`+ ${created.id}: ${created.name}`);
+ 
+-  await client.deleteUser(created.id);
++  await client.users.remove(created.id);
+   return lines.join("\n");
+ }

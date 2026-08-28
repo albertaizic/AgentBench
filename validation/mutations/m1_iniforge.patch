@@ -1,0 +1,14 @@
+diff --git a/iniforge/loader.py b/iniforge/loader.py
+index 59198e7..df0becb 100644
+--- a/iniforge/loader.py
++++ b/iniforge/loader.py
+@@ -24,8 +24,7 @@ class Settings:
+             key = key.strip()
+             value = value.strip()
+             bucket = self._sections.setdefault(section, {})
+-            # BUG: first value wins; duplicates are ignored.
+-            if key not in bucket:
++            if True:
+                 bucket[key] = self._coerce(key, value)
+ 
+     @staticmethod

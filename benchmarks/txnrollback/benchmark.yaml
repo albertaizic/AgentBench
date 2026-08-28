@@ -1,0 +1,76 @@
+name: txnrollback
+repository: fixture
+commit: 3a887f88b12b66dac2d4e8c80313c66bcd094914
+description: |
+  Batch commits in the payment engine are not atomic end to end: the
+  partial-commit path applies ledger entries and writes posted audit rows
+  and queued customer notifications BEFORE the remaining operations are
+  validated, so a mid-batch failure leaves audit/outbox state describing
+  work that was rolled back.
+prompt: |
+  Reconciliation flagged our batch payment engine: when a batch fails part
+  way through, the books and the customer-facing outbox disagree with what
+  actually happened. Auditors found posted audit rows for operations that
+  were rolled back, and customers received "payment processed"
+  notifications for batches that aborted.
+
+  Required observable behavior after the fix:
+  - A batch whose commit fails at any point (insufficient funds, unknown
+    account, invalid amount) must leave every account balance exactly as it
+    was — the ledger mutation set is all-or-nothing.
+  - An aborted batch must leave NO posted audit rows behind; instead the
+    trail records a compensating reversal entry for the batch explaining
+    the abort.
+  - Nothing from an aborted batch may remain deliverable in the
+    notification outbox.
+  - Successful batches keep their current contract: one posted audit row
+    and one queued notification per operation, applied in order.
+  - Committing a batch twice must be rejected without duplicating audit or
+    outbox entries.
+
+  The failing public tests pin this contract; hidden acceptance checks use
+  different data. Do not modify files under tests/.
+agent:
+  type: claude-code
+evaluations:
+  - name: smoke
+    command: '"{python}" -m pytest -q'
+scoring_groups:
+  core_behavior: {weight: 0.5, required: true}
+  consistency: {weight: 0.2, required: true}
+  edge_cases: {weight: 0.2, required: false}
+  diagnostics: {weight: 0.1, required: false}
+hidden_evaluations:
+  source: hidden
+  evaluations:
+    - name: batch-contract
+      command: '"{python}" -m pytest -q'
+protected_paths: [tests/**]
+fail_on_protected_path_violation: true
+category: bugfix
+tags: [transactions, atomicity, audit, long-horizon]
+suites: [long-horizon]
+language: python
+difficulty: hard
+expect_broken_baseline: true
+reference_solution:
+  patch: reference/fix.patch
+timeout_seconds: 900
+scorers: []
+prompt_requirements:
+  - {id: req-1, text: "A failed batch leaves all account balances untouched."}
+  - {id: req-2, text: "An aborted batch leaves no posted audit rows and records a compensating reversal entry."}
+  - {id: req-3, text: "No notifications from an aborted batch remain deliverable."}
+  - {id: req-4, text: "Double commit is rejected without duplicate side effects."}
+requirement_mappings:
+  - {requirement: req-1, scored_by: ["core_behavior"]}
+  - {requirement: req-2, scored_by: ["consistency"]}
+  - {requirement: req-3, scored_by: ["consistency"]}
+  - {requirement: req-4, scored_by: ["edge_cases"]}
+source_kind: authored
+task_created_at: "2026-08-25"
+task_public_since: null
+contamination_risk: low
+platforms: [any]
+instruction_style: explicit-task
+quality_status: provisional

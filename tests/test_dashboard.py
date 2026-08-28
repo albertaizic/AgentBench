@@ -331,3 +331,27 @@ class TestHttpServer:
         finally:
             server.shutdown()
             server.server_close()
+
+
+def test_confined_run_dir_rejects_foreign_absolute_paths(tmp_path):
+    """A copied index must not point the dashboard at another results root."""
+    from agentbench.dashboard import DashboardStore, _confined_run_dir
+
+    store = DashboardStore(tmp_path / "root-a")
+    foreign = tmp_path / "root-b" / "bench" / "run1"
+    run = {"result_dir": str(foreign)}
+
+    assert _confined_run_dir(store, run) is None
+
+
+def test_confined_run_dir_accepts_own_root(tmp_path):
+    from agentbench.dashboard import DashboardStore, _confined_run_dir
+
+    root = tmp_path / "root-a"
+    own = root / "bench" / "run1"
+    own.mkdir(parents=True)
+    store = DashboardStore(root)
+
+    resolved = _confined_run_dir(store, {"result_dir": str(own)})
+
+    assert resolved is not None and resolved.name == "run1"

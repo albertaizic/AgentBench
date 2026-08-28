@@ -1,0 +1,75 @@
+diff --git a/ratelimit.py b/ratelimit.py
+index b5df9f7..f04f0d8 100644
+--- a/ratelimit.py
++++ b/ratelimit.py
+@@ -1,13 +1,68 @@
+ """Token-bucket rate limiter.
+ 
+-The binding behavioral contract lives in docs/api.md. Implement it here.
++Implements the binding behavioral contract in docs/api.md.
+ """
+ 
+ from __future__ import annotations
+ 
++import math
+ import time
+ 
+ 
++class _TokenBucket:
++    """Independent token-bucket limiter driven entirely by an injected clock."""
++
++    __slots__ = ("_capacity", "_refill_rate", "_clock", "_balance", "_last")
++
++    def __init__(self, capacity: float, refill_rate: float, clock) -> None:
++        self._capacity = float(capacity)
++        self._refill_rate = float(refill_rate)
++        self._clock = clock
++        self._balance = self._capacity
++        self._last = clock()
++
++    # -- internals -------------------------------------------------------
++    def _refill(self) -> None:
++        now = self._clock()
++        gained = (now - self._last) * self._refill_rate
++        if gained > 0:
++            self._balance = min(self._capacity, self._balance + gained)
++        self._last = now
++
++    def _validated(self, tokens) -> float:
++        amount = float(tokens)
++        if amount <= 0 or amount > self._capacity:
++            raise ValueError(f"tokens must be in (0, {self._capacity}]: got {tokens!r}")
++        return amount
++
++    # -- contract --------------------------------------------------------
++    def available(self) -> float:
++        self._refill()
++        return self._balance
++
++    def try_acquire(self, tokens: float = 1.0) -> bool:
++        amount = self._validated(tokens)
++        self._refill()
++        if self._balance >= amount:
++            self._balance -= amount
++            return True
++        return False
++
++    def retry_after(self, tokens: float = 1.0) -> float:
++        amount = self._validated(tokens)
++        self._refill()
++        deficit = amount - self._balance
++        if deficit <= 0:
++            return 0.0
++        if self._refill_rate > 0:
++            return deficit / self._refill_rate
++        return math.inf
++
++
+ def make_limiter(capacity, refill_rate, *, clock=time.monotonic):
+     """Build an independent token-bucket limiter (see docs/api.md)."""
+-    raise NotImplementedError("ratelimit.make_limiter is not implemented yet")
++    if capacity <= 0:
++        raise ValueError("capacity must be positive")
++    if refill_rate < 0:
++        raise ValueError("refill_rate must be non-negative")
++    return _TokenBucket(capacity, refill_rate, clock)

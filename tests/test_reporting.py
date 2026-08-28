@@ -97,7 +97,8 @@ class TestRenderMarkdown:
         assert "provider=openrouter" in md and "reasoning=low" in md
         assert "Wilson" in md or "%" in md          # intervals rendered
         assert "McNemar exact p=" in md             # paired statistics present
-        assert "both pass 2 · A only 2 · B only 0 · both fail 0" in md
+        assert "both pass 2 · claude-a only 2 · hermes-b only 0" in md
+        assert "marginal check: claude-a 4 passes (2+2)" in md
         assert "uncalibrated" in md                 # saturation table
         assert "do not generalize" in md            # limitations stated
 
@@ -157,7 +158,9 @@ class TestExportBundle:
 
         names = {p.name for p in written}
         assert names == {"README.md", "experiment.json", "identities.json",
-                         "metrics.csv", "report.md", "report.html"}
+                         "metrics.csv", "report.md", "report.html", "hashes.json"}
+        hashes = json.loads((dest / "hashes.json").read_text(encoding="utf-8"))
+        assert set(hashes) == names - {"hashes.json"}
         metrics = (dest / "metrics.csv").read_text(encoding="utf-8")
         assert "result_dir" not in metrics          # local paths never ship
         identities = json.loads((dest / "identities.json").read_text(encoding="utf-8"))
@@ -178,3 +181,22 @@ class TestExportBundle:
 
         with pytest.raises(SecretLeakError, match="OpenRouter"):
             export_bundle(study, manifest, make_rows(), tmp_path / "bundle")
+
+
+def test_setup_failed_cells_never_enter_graded_denominator(tmp_path):
+    """A setup failure with migrated validity=valid must stay out of the
+    capability denominator while remaining visible as an attempted cell."""
+    rows = make_rows() + [{
+        "run_id": "r-alpha-setup", "benchmark": "alpha",
+        "config_name": "claude-a", "agent": "claude-code",
+        "model": "claude-sonnet-4-6", "status": "setup_failed", "trial": 3,
+        "duration_seconds": 2.0, "total_tokens": None, "cost_usd": None,
+        "insertions": 0, "deletions": 0, "execution_backend": "docker",
+        "validity": "valid",  # what the storage migration records
+    }]
+    study = build_study(make_manifest(tmp_path), rows)
+    agg = next(a for a in study.aggregates if a.name == "claude-a")
+    assert agg.runs == 5            # attempted cells stay visible
+    assert agg.graded == 4          # denominator excludes the setup failure
+    assert agg.passes == 4
+    assert agg.pass_rate == 1.0     # ...and the rate is computed over graded only

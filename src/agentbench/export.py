@@ -42,6 +42,10 @@ EXPORT_COLUMNS = [
     "output_tokens",
     "total_tokens",
     "cost_usd",
+    # Presentation-consistency (P41/P16): every machine-readable surface
+    # must expose validity and cost provenance, not just study bundles.
+    "cost_provenance",
+    "validity",
     "result_dir",
 ]
 

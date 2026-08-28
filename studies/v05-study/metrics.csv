@@ -1,61 +1,61 @@
-run_id,experiment_id,benchmark,config_name,agent,model,status,trial,duration_seconds,total_tokens,cost_usd,cost_provenance,files_changed,insertions,deletions,execution_backend
-20260825T013845Z-d97e13,20260825T010230Z-4caf630c,bankday,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,126.11,195679,,unpriced/provider_models_api/unknown,1,16,9,host
-20260825T013706Z-72d456,20260825T010230Z-4caf630c,bankday,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,123.797,155917,,unpriced/provider_models_api/unknown,1,16,9,host
-20260825T013704Z-327158,20260825T010230Z-4caf630c,bankday,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,101.313,157154,,unpriced/provider_models_api/unknown,1,16,9,host
-20260825T013633Z-410a0a,20260825T010230Z-4caf630c,bankday,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,33.359,170954,0.10866620000000002,reported,1,14,9,host
-20260825T013626Z-5fcb1d,20260825T010230Z-4caf630c,bankday,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,37.141,303617,0.1356772,reported,1,14,9,host
-20260825T013602Z-abb70e,20260825T010230Z-4caf630c,bankday,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,31.0,170073,0.1043952,reported,1,14,9,host
-20260825T013411Z-f74bd4,20260825T010230Z-4caf630c,statediag,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,134.812,182478,,unpriced/provider_models_api/unknown,1,1,6,host
-20260825T013343Z-eada76,20260825T010230Z-4caf630c,statediag,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,138.937,196644,,unpriced/provider_models_api/unknown,1,4,6,host
-20260825T012711Z-7eea25,20260825T010230Z-4caf630c,leasekit,hermes-openrouter,hermes,stealth/ox-alpha,evaluation_failed,2,420.0,717771,,unpriced/provider_models_api/unknown,1,20,12,host
-20260825T013210Z-d02667,20260825T010230Z-4caf630c,statediag,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,92.61,134915,,unpriced/provider_models_api/unknown,1,3,6,host
-20260825T013135Z-37b3e8,20260825T010230Z-4caf630c,statediag,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,35.406,205322,0.1142856,reported,2,1,7,host
-20260825T013051Z-749f5d,20260825T010230Z-4caf630c,statediag,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,43.797,252298,0.14326,reported,1,1,6,host
-20260825T013010Z-1d2386,20260825T010230Z-4caf630c,statediag,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,40.25,246980,0.1339882,reported,2,1,7,host
-20260825T012829Z-29c312,20260825T010230Z-4caf630c,leasekit,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,101.25,155532,,unpriced/provider_models_api/unknown,1,6,7,host
-20260825T012653Z-2f5242,20260825T010230Z-4caf630c,leasekit,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,95.375,140304,,unpriced/provider_models_api/unknown,1,6,7,host
-20260825T012505Z-7412a6,20260825T010230Z-4caf630c,vercomp,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,125.906,170677,,unpriced/provider_models_api/unknown,1,30,8,host
-20260825T012645Z-76f37c,20260825T010230Z-4caf630c,leasekit,claude-code,claude-code,,agent_failed,3,8.313,0,,unpriced/reported,0,0,0,host
-20260825T012637Z-688910,20260825T010230Z-4caf630c,leasekit,claude-code,claude-code,,agent_failed,2,8.36,0,,unpriced/reported,0,0,0,host
-20260825T012628Z-967e90,20260825T010230Z-4caf630c,leasekit,claude-code,claude-code,,agent_failed,1,8.938,0,,unpriced/reported,0,0,0,host
-20260825T012418Z-3dafe1,20260825T010230Z-4caf630c,vercomp,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,129.718,189081,,unpriced/provider_models_api/unknown,1,39,6,host
-20260825T012338Z-5eb0a5,20260825T010230Z-4caf630c,vercomp,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,87.485,114447,,unpriced/provider_models_api/unknown,1,37,6,host
-20260825T012328Z-e1e2c9,20260825T010230Z-4caf630c,vercomp,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,49.344,237084,0.14007959999999997,reported,1,16,5,host
-20260825T012252Z-039bf6,20260825T010230Z-4caf630c,vercomp,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,46.094,171751,0.12340399999999999,reported,1,19,5,host
-20260825T012150Z-0bb319,20260825T010230Z-4caf630c,tokenbucket,hermes-openrouter,hermes,stealth/ox-alpha,evaluation_failed,3,98.094,138965,,unpriced/provider_models_api/unknown,1,2,5,host
-20260825T012210Z-6d07e9,20260825T010230Z-4caf630c,vercomp,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,41.609,234085,0.1264074,reported,1,19,5,host
-20260825T012024Z-225084,20260825T010230Z-4caf630c,tokenbucket,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,105.407,169671,,unpriced/provider_models_api/unknown,1,7,6,host
-20260825T012023Z-52c34c,20260825T010230Z-4caf630c,tokenbucket,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,87.469,133634,,unpriced/provider_models_api/unknown,1,4,5,host
-20260825T011954Z-21deb0,20260825T010230Z-4caf630c,tokenbucket,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,29.984,166187,0.09332819999999999,reported,1,3,6,host
-20260825T011952Z-e8ddae,20260825T010230Z-4caf630c,tokenbucket,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,30.141,165880,0.09190820000000001,reported,1,3,6,host
-20260825T011921Z-77fd72,20260825T010230Z-4caf630c,tokenbucket,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,32.625,165790,0.0914824,reported,1,3,6,host
-20260825T011811Z-55fc25,20260825T010230Z-4caf630c,prefsfile,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,100.844,133816,,unpriced/provider_models_api/unknown,1,19,4,host
-20260825T011701Z-b7c413,20260825T010230Z-4caf630c,prefsfile,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,140.172,206930,,unpriced/provider_models_api/unknown,1,17,3,host
-20260825T011632Z-17d5c2,20260825T010230Z-4caf630c,prefsfile,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,99.172,129348,,unpriced/provider_models_api/unknown,1,19,4,host
-20260825T011620Z-e48836,20260825T010230Z-4caf630c,prefsfile,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,40.985,232112,0.1163814,reported,1,18,4,host
-20260825T011605Z-7d41e8,20260825T010230Z-4caf630c,prefsfile,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,26.766,167586,0.097422,reported,1,15,4,host
-20260825T011450Z-89a7ac,20260825T010230Z-4caf630c,csvroll,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,90.437,129306,,unpriced/provider_models_api/unknown,1,11,12,host
-20260825T011528Z-031e6d,20260825T010230Z-4caf630c,prefsfile,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,37.531,167218,0.1022282,reported,1,16,4,host
-20260825T011342Z-2f762e,20260825T010230Z-4caf630c,csvroll,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,105.969,148679,,unpriced/provider_models_api/unknown,1,11,12,host
-20260825T011309Z-fb699a,20260825T010230Z-4caf630c,csvroll,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,99.984,148646,,unpriced/provider_models_api/unknown,1,16,12,host
-20260825T011109Z-fd7a31,20260825T010230Z-4caf630c,iniforge,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,152.984,217803,,unpriced/provider_models_api/unknown,1,10,7,host
-20260825T011234Z-0186c8,20260825T010230Z-4caf630c,csvroll,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,35.187,234050,0.11713080000000002,reported,1,11,12,host
-20260825T011200Z-83109e,20260825T010230Z-4caf630c,csvroll,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,33.765,264985,0.1193468,reported,1,13,12,host
-20260825T011126Z-a0b3cb,20260825T010230Z-4caf630c,csvroll,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,33.735,200831,0.1036962,reported,1,11,12,host
-20260825T010911Z-e19504,20260825T010230Z-4caf630c,iniforge,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,135.203,231318,,unpriced/provider_models_api/unknown,1,11,7,host
-20260825T010923Z-2fca35,20260825T010230Z-4caf630c,iniforge,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,105.11,169143,,unpriced/provider_models_api/unknown,1,13,7,host
-20260825T010856Z-5f8a65,20260825T010230Z-4caf630c,iniforge,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,27.328,168250,0.0968326,reported,1,12,7,host
-20260825T010735Z-fec98c,20260825T010230Z-4caf630c,ledgerpad,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,96.297,129123,,unpriced/provider_models_api/unknown,1,6,1,host
-20260825T010826Z-ea55ee,20260825T010230Z-4caf630c,iniforge,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,30.0,268464,0.11988180000000001,reported,1,8,7,host
-20260825T010753Z-f4c1d1,20260825T010230Z-4caf630c,iniforge,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,32.281,237657,0.115099,reported,1,12,7,host
-20260825T010606Z-a25944,20260825T010230Z-4caf630c,ledgerpad,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,107.532,145149,,unpriced/provider_models_api/unknown,2,12,0,host
-20260825T010616Z-c05351,20260825T010230Z-4caf630c,ledgerpad,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,78.265,146132,,unpriced/provider_models_api/unknown,1,6,1,host
-20260825T010547Z-22579f,20260825T010230Z-4caf630c,ledgerpad,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,29.547,230197,0.10463299999999999,reported,1,5,1,host
-20260825T010431Z-fb6793,20260825T010230Z-4caf630c,jobqueue,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,94.375,128991,,unpriced/provider_models_api/unknown,1,1,1,host
-20260825T010519Z-d0b514,20260825T010230Z-4caf630c,ledgerpad,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,27.938,165750,0.0941982,reported,1,6,1,host
-20260825T010454Z-ecd9f4,20260825T010230Z-4caf630c,ledgerpad,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,24.609,164342,0.08905300000000001,reported,1,6,1,host
-20260825T010320Z-77cf9c,20260825T010230Z-4caf630c,jobqueue,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,93.719,130241,,unpriced/provider_models_api/unknown,1,1,1,host
-20260825T010259Z-70d5ac,20260825T010230Z-4caf630c,jobqueue,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,91.203,128990,,unpriced/provider_models_api/unknown,1,1,1,host
-20260825T010256Z-02630b,20260825T010230Z-4caf630c,jobqueue,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,3,24.297,163255,0.0862066,reported,1,1,1,host
-20260825T010230Z-da6f7f,20260825T010230Z-4caf630c,jobqueue,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,2,29.562,260568,0.1073306,reported,1,1,1,host
-20260825T010230Z-1d1b3f,20260825T010230Z-4caf630c,jobqueue,claude-code,claude-code,"claude-haiku-4-5-20251001, claude-sonnet-5",passed,1,25.609,163030,0.08489359999999999,reported,1,1,1,host
+run_id,experiment_id,benchmark,config_name,agent,model,status,trial,duration_seconds,total_tokens,cost_usd,cost_provenance,validity,files_changed,insertions,deletions,execution_backend
+20260824T222354Z-b97e23,20260824T213115Z-78d3985e,bankday,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,160.0,175149,,unpriced,valid,1,17,9,host
+20260824T222243Z-5ade6f,20260824T213115Z-78d3985e,bankday,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,147.469,179102,,unpriced,valid,1571,488539,8,host
+20260824T222212Z-de3fe9,20260824T213115Z-78d3985e,bankday,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,102.031,131064,,unpriced,valid,1,17,10,host
+20260824T222056Z-c20689,20260824T213115Z-78d3985e,bankday,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,106.75,182859,0.293028,,valid,1,16,9,host
+20260824T222042Z-2bbad4,20260824T213115Z-78d3985e,bankday,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,89.422,218032,0.453677,,valid,1,16,9,host
+20260824T221910Z-e87f2b,20260824T213115Z-78d3985e,bankday,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,106.5,218054,0.34907299999999997,,valid,1,16,9,host
+20260824T221742Z-18650d,20260824T213115Z-78d3985e,statediag,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,179.907,153092,,unpriced,valid,1,2,6,host
+20260824T221543Z-de1c93,20260824T213115Z-78d3985e,statediag,hermes-openrouter,hermes,stealth/ox-alpha,passed,2,206.453,222344,,unpriced,valid,1,2,6,host
+20260824T221439Z-87e1fc,20260824T213115Z-78d3985e,statediag,hermes-openrouter,hermes,stealth/ox-alpha,passed,1,183.266,277375,,unpriced,valid,1,1,6,host
+20260824T221358Z-8f56cc,20260824T213115Z-78d3985e,statediag,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,105.344,284952,0.535726,,valid,2,4,7,host
+20260824T221312Z-d0a8e9,20260824T213115Z-78d3985e,statediag,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,86.704,213891,0.28875300000000004,,valid,1,1,6,host
+20260824T221131Z-cbe127,20260824T213115Z-78d3985e,statediag,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,146.515,316044,0.489399,,valid,2,5,7,host
+20260824T221059Z-f816ba,20260824T213115Z-78d3985e,leasekit,hermes-openrouter,hermes,stealth/ox-alpha,passed,3,132.562,185671,,unpriced,valid,1,6,7,host
+20260824T220700Z-e549a9,20260824T213115Z-78d3985e,leasekit,claude-code,claude-code,stealth/ox-alpha[1m],evaluation_failed,3,270.485,345655,0.547335,,valid,1,24,14,host
+20260824T221013Z-96bac8,20260824T213115Z-78d3985e,leasekit,hermes-openrouter,hermes,,evaluation_failed,2,45.906,,,,valid,0,0,0,host
+20260824T220726Z-223220,20260824T213115Z-78d3985e,leasekit,hermes-openrouter,hermes,stealth/ox-alpha,evaluation_failed,1,167.093,202011,,unpriced,valid,1,9,10,host
+20260824T220040Z-efe7f8,20260824T213115Z-78d3985e,leasekit,claude-code,claude-code,stealth/ox-alpha[1m],evaluation_failed,1,405.656,451244,0.79454,,valid,1,43,19,host
+20260824T220227Z-13ff7d,20260824T213115Z-78d3985e,leasekit,claude-code,claude-code,stealth/ox-alpha[1m],evaluation_failed,2,273.391,393642,0.6217010000000001,,valid,1,23,14,host
+20260824T215803Z-ea4e2c,20260824T213115Z-78d3985e,vercomp,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,263.406,264075,0.558137,,valid,1,41,7,host
+20260824T220001Z-30db0d,20260824T213115Z-78d3985e,vercomp,hermes-openrouter,hermes,,evaluation_failed,3,39.422,,,,valid,0,0,0,host
+20260824T215921Z-bf49c5,20260824T213115Z-78d3985e,vercomp,hermes-openrouter,hermes,,evaluation_failed,2,39.469,,,,valid,0,0,0,host
+20260824T215840Z-4de161,20260824T213115Z-78d3985e,vercomp,hermes-openrouter,hermes,,evaluation_failed,1,41.485,,,,valid,0,0,0,host
+20260824T215537Z-e00072,20260824T213115Z-78d3985e,vercomp,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,182.594,260810,0.351593,,valid,1,20,6,host
+20260824T215504Z-5d5e1a,20260824T213115Z-78d3985e,vercomp,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,179.14,294747,0.47553900000000004,,valid,1,30,6,host
+20260824T215457Z-7531bc,20260824T213115Z-78d3985e,tokenbucket,hermes-openrouter,hermes,,evaluation_failed,3,40.172,,,,valid,0,0,0,host
+20260824T215424Z-1eb933,20260824T213115Z-78d3985e,tokenbucket,hermes-openrouter,hermes,,evaluation_failed,2,40.219,,,,valid,0,0,0,host
+20260824T215338Z-8a410d,20260824T213115Z-78d3985e,tokenbucket,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,78.75,213559,0.332966,,valid,1,3,5,host
+20260824T215346Z-1b5d2b,20260824T213115Z-78d3985e,tokenbucket,hermes-openrouter,hermes,,evaluation_failed,1,37.516,,,,valid,0,0,0,host
+20260824T215213Z-c0a458,20260824T213115Z-78d3985e,tokenbucket,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,93.0,215387,0.309746,,valid,1,5,5,host
+20260824T215204Z-ebd5d0,20260824T213115Z-78d3985e,tokenbucket,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,93.937,245580,0.430977,,valid,1,9,8,host
+20260824T215129Z-e33ab6,20260824T213115Z-78d3985e,prefsfile,hermes-openrouter,hermes,,evaluation_failed,3,44.546,,,,valid,0,0,0,host
+20260824T215120Z-02fb8e,20260824T213115Z-78d3985e,prefsfile,hermes-openrouter,hermes,,evaluation_failed,2,43.625,,,,valid,0,0,0,host
+20260824T215045Z-a1c5df,20260824T213115Z-78d3985e,prefsfile,hermes-openrouter,hermes,,evaluation_failed,1,43.266,,,,valid,0,0,0,host
+20260824T214617Z-0c2f86,20260824T213115Z-78d3985e,prefsfile,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,302.735,380710,0.647723,,valid,1,22,6,host
+20260824T214858Z-c4e7c1,20260824T213115Z-78d3985e,prefsfile,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,106.75,250932,0.34768,,valid,1,23,2,host
+20260824T214629Z-375c6c,20260824T213115Z-78d3985e,prefsfile,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,149.062,216936,0.39796100000000006,,valid,1,21,4,host
+20260824T214403Z-2cc560,20260824T213115Z-78d3985e,csvroll,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,146.125,314177,0.39798999999999995,,valid,1,13,12,host
+20260824T214533Z-9d453f,20260824T213115Z-78d3985e,csvroll,hermes-openrouter,hermes,,evaluation_failed,3,44.016,,,,valid,0,0,0,host
+20260824T214452Z-082d1b,20260824T213115Z-78d3985e,csvroll,hermes-openrouter,hermes,,evaluation_failed,2,41.469,,,,valid,0,0,0,host
+20260824T214412Z-e892d4,20260824T213115Z-78d3985e,csvroll,hermes-openrouter,hermes,,evaluation_failed,1,39.719,,,,valid,0,0,0,host
+20260824T214103Z-d1f545,20260824T213115Z-78d3985e,csvroll,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,189.156,191846,0.44089800000000007,,valid,1,12,11,host
+20260824T214127Z-e153db,20260824T213115Z-78d3985e,csvroll,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,155.922,253998,0.47200999999999993,,valid,1,12,11,host
+20260824T214049Z-bd999f,20260824T213115Z-78d3985e,iniforge,hermes-openrouter,hermes,,evaluation_failed,3,38.359,,,,valid,0,0,0,host
+20260824T213806Z-6631b2,20260824T213115Z-78d3985e,iniforge,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,176.813,310173,0.47485099999999997,,valid,1,13,7,host
+20260824T214006Z-4579ed,20260824T213115Z-78d3985e,iniforge,hermes-openrouter,hermes,,evaluation_failed,2,42.219,,,,valid,0,0,0,host
+20260824T213926Z-384f37,20260824T213115Z-78d3985e,iniforge,hermes-openrouter,hermes,,evaluation_failed,1,40.313,,,,valid,0,0,0,host
+20260824T213833Z-01a719,20260824T213115Z-78d3985e,iniforge,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,52.734,181578,0.23905400000000002,,valid,1,13,7,host
+20260824T213750Z-a85e8e,20260824T213115Z-78d3985e,iniforge,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,43.235,180458,0.361243,,valid,1,13,7,host
+20260824T213726Z-72d322,20260824T213115Z-78d3985e,ledgerpad,hermes-openrouter,hermes,,evaluation_failed,3,40.031,,,,valid,0,0,0,host
+20260824T213704Z-460e91,20260824T213115Z-78d3985e,ledgerpad,hermes-openrouter,hermes,,evaluation_failed,2,45.203,,,,valid,0,0,0,host
+20260824T213528Z-e96828,20260824T213115Z-78d3985e,ledgerpad,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,117.516,242299,0.448872,,valid,1,6,1,host
+20260824T213625Z-4ca42a,20260824T213115Z-78d3985e,ledgerpad,hermes-openrouter,hermes,,evaluation_failed,1,39.672,,,,valid,0,0,0,host
+20260824T213431Z-c01494,20260824T213115Z-78d3985e,ledgerpad,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,113.171,277273,0.34532599999999997,,valid,1,6,1,host
+20260824T213400Z-90a0ec,20260824T213115Z-78d3985e,ledgerpad,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,88.079,212586,0.273356,,valid,1,8,1,host
+20260824T213348Z-4a8092,20260824T213115Z-78d3985e,jobqueue,hermes-openrouter,hermes,,evaluation_failed,3,43.171,,,,valid,0,0,0,host
+20260824T213319Z-2c4a76,20260824T213115Z-78d3985e,jobqueue,hermes-openrouter,hermes,,evaluation_failed,2,41.093,,,,valid,0,0,0,host
+20260824T213227Z-eb0f5d,20260824T213115Z-78d3985e,jobqueue,claude-code,claude-code,stealth/ox-alpha[1m],passed,3,80.531,208630,0.368579,,valid,1,1,1,host
+20260824T213233Z-663bde,20260824T213115Z-78d3985e,jobqueue,hermes-openrouter,hermes,,evaluation_failed,1,44.906,,,,valid,0,0,0,host
+20260824T213115Z-a76b12,20260824T213115Z-78d3985e,jobqueue,claude-code,claude-code,stealth/ox-alpha[1m],passed,2,77.672,246135,0.31348,,valid,1,1,1,host
+20260824T213115Z-e14034,20260824T213115Z-78d3985e,jobqueue,claude-code,claude-code,stealth/ox-alpha[1m],passed,1,71.156,242922,0.27683599999999997,,valid,1,1,1,host

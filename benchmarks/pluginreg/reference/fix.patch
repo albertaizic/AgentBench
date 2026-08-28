@@ -1,0 +1,26 @@
+diff --git a/pluginreg/registry.py b/pluginreg/registry.py
+index 0110993..c9f55c8 100644
+--- a/pluginreg/registry.py
++++ b/pluginreg/registry.py
+@@ -44,15 +44,14 @@ class PluginRegistry:
+         self._order: list[str] = []
+ 
+     def register(self, spec: PluginSpec) -> None:
+-        if spec.name in self._specs:
++        # Names are unique after normalization; registration order carries no
++        # dependency semantics. Missing dependencies and cycles surface when
++        # resolve_activation_order() runs against the fully registered set.
++        key = normalize(spec.name)
++        if key in self._by_norm:
+             raise DuplicatePluginError(f"plugin already registered: {spec.name}")
+-        for dep in spec.requires:
+-            if normalize(dep) not in self._by_norm:
+-                raise UnknownDependencyError(
+-                    f"{spec.name} requires unregistered plugin: {dep}"
+-                )
+         self._specs[spec.name] = spec
+-        self._by_norm[spec.name] = spec.name
++        self._by_norm[key] = spec.name
+         self._order.append(spec.name)
+ 
+     def names(self) -> tuple[str, ...]:

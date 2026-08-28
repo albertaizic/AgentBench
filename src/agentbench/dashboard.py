@@ -283,17 +283,84 @@ def render_runs(store: DashboardStore, params: dict) -> str:
     return _page("AgentBench — Runs", body)
 
 
+def _confined_run_dir(store: DashboardStore, run: dict) -> Path | None:
+    """Resolve the run's directory, refusing paths outside this root.
+
+    A copied/moved index may carry absolute result_dir pointers into another
+    results root; serving those would leak foreign evidence.
+    """
+    raw = Path(run["result_dir"])
+    candidate = raw if raw.is_absolute() else store.results_root / raw
+    try:
+        resolved = candidate.resolve()
+        resolved.relative_to(store.results_root.resolve())
+    except (OSError, ValueError):
+        return None
+    return resolved
+
+
 def _load_evidence(store: DashboardStore, run_id: str) -> dict | None:
     run = store.get_run(run_id)
     if run is None:
         return None
-    result_file = Path(run["result_dir"]) / "result.json"
+    run_dir = _confined_run_dir(store, run)
+    if run_dir is None:
+        return None
+    result_file = run_dir / "result.json"
     try:
         import json
 
         return json.loads(result_file.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+
+
+def _validity_badge(validity) -> str:
+    """Outcome vs validity (P41): infra_invalid cells are graded separately."""
+    v = str(validity or "valid")
+    css = {"valid": "passed", "infra_invalid": "violation",
+           "integrity_warning": "failed", "invalid": "violation"}.get(v, "")
+    return f'<span class="{css}">{html.escape(v)}</span>' if css else html.escape(v)
+
+
+def trajectory_section(results_root: Path, run_id: str) -> str:
+    """Normalized trajectory timeline (P6/P35). Privacy-aware: tool/command
+    activity only; the parser never exports model reasoning."""
+    from agentbench.trajectories import load_trajectory
+
+    header, events = None, []
+    for candidate in sorted(Path(results_root).glob(f"*/*/trajectory.jsonl")):
+        pass
+    # locate via run id pattern (benchmark dir is unknown here)
+    for candidate in sorted(Path(results_root).glob(f"*/{run_id}/trajectory.jsonl")):
+        try:
+            header, events = load_trajectory(candidate.parent)
+        except Exception:  # noqa: BLE001 - dashboard must stay robust
+            header, events = {}, []
+        break
+    if not header:
+        return ("<h2>Trajectory</h2><p>No normalized trajectory recorded "
+                "(pre-v0.6 run or extraction unavailable).</p>")
+    rows = []
+    for ev in events[:200]:
+        rel = ev.get("relative_ms")
+        stamp = f"{rel/1000:.1f}s" if isinstance(rel, (int, float)) else "—"
+        md = ev.get("metadata") or {}
+        detail = md.get("command") or ev.get("path") or ""
+        mark = {True: "·", False: "✗"}.get(ev.get("success"), "")
+        rows.append([
+            esc(stamp), esc(str(ev.get("event_type"))),
+            esc(str(ev.get("tool") or "")), f"{mark} {esc(str(detail)[:90])}",
+            esc(str(ev.get("provenance"))),
+        ])
+    body = (
+        f"<h2>Trajectory <small>{esc(header.get('trajectory_status'))} · "
+        f"{len(events)} events</small></h2>"
+        + table(["T", "EVENT", "TOOL", "DETAIL", "PROVENANCE"], rows)
+    )
+    if len(events) > 200:
+        body += "<p>(first 200 events shown)</p>"
+    return body
 
 
 def render_run_detail(store: DashboardStore, run_id: str) -> str | None:
@@ -387,10 +454,12 @@ def render_run_detail(store: DashboardStore, run_id: str) -> str | None:
         ("Model", esc(agent.get("model"))),
         ("Capabilities", esc(", ".join((agent.get("capabilities") or [])) or "—")),
         ("Status", status_badge(overall.get("status"))),
+        ("Validity", _validity_badge(overall.get("validity"))),
         ("Failure reason", esc(overall.get("failure_reason"))),
         ("Failure stage", esc(overall.get("failure_stage") or "—")),
         ("Duration", format_duration(overall.get("duration_seconds"))),
     ])}
+    {trajectory_section(store.results_root, run_id)}
     <h2>Stage timings</h2>
     {key_value_table(sorted((payload.get('stage_timings') or {}).items()))}
     <h2>Evaluations</h2>
@@ -412,7 +481,7 @@ def render_run_detail(store: DashboardStore, run_id: str) -> str | None:
     {key_value_table([(k, esc(v)) for k, v in environment.items()])}
     <h3>Artifacts</h3>
     <p>{artifact_links}</p>
-    <p>Result directory: <code>{esc(run.get('result_dir'))}</code></p>
+    <p>Result directory: <code>{esc(str(_confined_run_dir(store, run) or 'outside results root'))}</code></p>
     """
     return _page(f"AgentBench — {run_id}", body)
 
@@ -605,8 +674,11 @@ def render_experiment_detail(store: DashboardStore, experiment_id: str) -> str |
             f"{format_duration(iqr[0])}–{format_duration(iqr[1])}"
             if iqr else "—"
         )
+        # One aggregate row per (config, benchmark) task identity; label the
+        # benchmark scope so identical config names stay distinguishable.
+        scope = f" @ {next(iter(g.benchmarks))}" if len(g.benchmarks) == 1 else ""
         group_rows.append([
-            esc(g.label),
+            esc(g.label + scope),
             str(g.runs),
             format_percent(g.pass_rate) + f' <span class="dim">[{bounds}]</span>',
             format_duration(g.median_duration)
@@ -620,35 +692,46 @@ def render_experiment_detail(store: DashboardStore, experiment_id: str) -> str |
     pair_sections = []
     for i in range(len(groups)):
         for j in range(i + 1, len(groups)):
+            def graded(h):
+                # Capability pairing uses validly graded cells only (P41);
+                # infra-invalid runs never become fabricated failures.
+                return [r for r in rows if r.get("config_hash") == h
+                        and r.get("validity") in (None, "", "valid")]
             stats = pairwise_statistics(
-                [r for r in rows if r.get("config_hash") == groups[i].config_hash],
-                [r for r in rows if r.get("config_hash") == groups[j].config_hash],
+                graded(groups[i].config_hash),
+                graded(groups[j].config_hash),
             )
             if not stats:
                 continue
             p_value = stats.get("mcnemar_p")
             p_text = f"{p_value:.3f}" if isinstance(p_value, float) else "—"
+            label_a, label_b = groups[i].label, groups[j].label
             rows_pair = [
                 ["Matched cells", str(stats["matched"])],
-                ["A passed / B failed", str(stats["a_only"])],
-                ["B passed / A failed", str(stats["b_only"])],
+                [f"{label_a} passed / {label_b} failed", str(stats["a_only"])],
+                [f"{label_b} passed / {label_a} failed", str(stats["b_only"])],
                 ["Both passed", str(stats["both_pass"])],
                 ["Both failed", str(stats["both_fail"])],
                 ["McNemar exact p", p_text],
                 [
+                    "Marginal check",
+                    f"{label_a}: {stats['a_passes_matched']} passes · "
+                    f"{label_b}: {stats['b_passes_matched']} passes (matched cells)",
+                ],
+                [
                     "Median time among mutual passes",
-                    f"A {format_duration(stats['a_median_duration_mutual_pass'])}"
-                    f" · B {format_duration(stats['b_median_duration_mutual_pass'])}",
+                    f"{label_a} {format_duration(stats['a_median_duration_mutual_pass'])}"
+                    f" · {label_b} {format_duration(stats['b_median_duration_mutual_pass'])}",
                 ],
                 [
                     "Median tokens among mutual passes",
-                    f"A {format_count(stats['a_median_tokens_mutual_pass'])}"
-                    f" · B {format_count(stats['b_median_tokens_mutual_pass'])}",
+                    f"{label_a} {format_count(stats['a_median_tokens_mutual_pass'])}"
+                    f" · {label_b} {format_count(stats['b_median_tokens_mutual_pass'])}",
                 ],
                 [
                     "Median cost among mutual passes",
-                    f"A {esc(format_count(stats['a_median_cost_usd_mutual_pass'], '$') if stats['a_median_cost_usd_mutual_pass'] is not None else '—')}"
-                    f" · B {esc(format_count(stats['b_median_cost_usd_mutual_pass'], '$') if stats['b_median_cost_usd_mutual_pass'] is not None else '—')}",
+                    f"{label_a} {esc(format_count(stats['a_median_cost_usd_mutual_pass'], '$') if stats['a_median_cost_usd_mutual_pass'] is not None else '—')}"
+                    f" · {label_b} {esc(format_count(stats['b_median_cost_usd_mutual_pass'], '$') if stats['b_median_cost_usd_mutual_pass'] is not None else '—')}",
                 ],
             ]
             pair_sections.append(
@@ -860,7 +943,7 @@ def make_dashboard(results_root: Path, port: int = 8765, host: str = "127.0.0.1"
                 run = store.get_run(run_id)
                 if run is None:
                     return 404, "text/plain; charset=utf-8", "not found"
-                artifact = resolve_artifact(Path(run["result_dir"]), segments[2:])
+                artifact = resolve_artifact(_confined_run_dir(store, run) or Path(), segments[2:])
                 if artifact is None:
                     return 404, "text/plain; charset=utf-8", "not found"
                 return 200, "text/plain; charset=utf-8", artifact.read_text(encoding="utf-8", errors="replace")
