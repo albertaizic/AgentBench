@@ -304,18 +304,6 @@ vs OMP system comparison. Verify it without trusting the prose:
 agentbench study verify studies/v06-study
 ```
 
-### Dashboard screenshots
-
-![AgentBench main dashboard showing experiment overview with 32 benchmarks](docs/assets/screenshots/dashboard-main.png)
-
-![System comparison study: Claude Code vs OMP over 18 matched cells](docs/assets/screenshots/system-comparison-study.png)
-
-![Model-controlled study: Hermes ox-alpha vs gpt-oss-20b over 24 matched cells](docs/assets/screenshots/model-controlled-study.png)
-
-![Benchmark audit view with per-benchmark pass rates and validation status](docs/assets/screenshots/benchmark-audit.png)
-
-![Run trajectory detail showing agent evidence, evaluations, diff stats, and timings](docs/assets/screenshots/run-trajectory.png)
-
 ## Baselines
 
 `agentbench run <benchmark.yaml> --baseline reference` applies the benchmark's
