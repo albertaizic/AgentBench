@@ -17,7 +17,8 @@ from typer.testing import CliRunner
 from agentbench.cli import EXIT_FAIL, app
 from agentbench.experiments import ExperimentManifest
 from agentbench.reporting import build_study, export_bundle
-from tests.test_presentation_consistency import (build_rows, make_manifest)
+
+from _helpers import build_rows, make_manifest
 
 runner = CliRunner()
 

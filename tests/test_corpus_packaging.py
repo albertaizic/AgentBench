@@ -2,13 +2,37 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
-
-from hatch_build import SKIP_PATH_PARTS, corpus_wheel_files
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def _load_hatch_build():
+    """Load the repository-root ``hatch_build.py`` by absolute path.
+
+    ``hatch_build.py`` is a Hatchling build hook at the repo root and is
+    intentionally NOT a normal importable package module — placing its
+    file path on ``sys.path`` would let other tests import arbitrary
+    repository-root modules and silently mask real packaging bugs. Load
+    it by filesystem location instead so this test exercises the actual
+    build hook under any pytest invocation mode.
+    """
+    hook_path = _repo_root() / "hatch_build.py"
+    spec = importlib.util.spec_from_file_location("_hatch_build_under_test",
+                                                  hook_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load build hook at {hook_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_HOOK = _load_hatch_build()
+SKIP_PATH_PARTS = _HOOK.SKIP_PATH_PARTS
+corpus_wheel_files = _HOOK.corpus_wheel_files
 
 
 class TestCorpusPackagingHook:

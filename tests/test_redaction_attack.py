@@ -18,7 +18,8 @@ from agentbench.reporting import (SecretLeakError, build_study,
                                   render_html, scan_for_secrets)
 from agentbench.experiments import ExperimentManifest
 from agentbench.storage import ResultIndex, default_db_path
-from tests.test_presentation_consistency import make_manifest
+
+from _helpers import make_manifest
 
 runner = CliRunner()
 
